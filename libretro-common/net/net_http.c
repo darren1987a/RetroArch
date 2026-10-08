@@ -1544,13 +1544,13 @@ int net_http_status(struct http_t *state)
  *
  * Leaf function.
  *
- * @return the response headers. The returned buffer is owned by the
- * caller of net_http_new; it is not freed by net_http_delete().
- * If the status is not 20x and accept_err is false, it returns NULL.
+ * @return the response headers, also for successful responses (e.g.
+ * Content-Range of a 206). The returned list is owned by the caller
+ * of net_http_new; it is not freed by net_http_delete().
  **/
 struct string_list *net_http_headers(struct http_t *state)
 {
-   if (!state || !state->err)
+   if (!state)
       return NULL;
    return state->response.headers;
 }

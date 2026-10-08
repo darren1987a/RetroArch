@@ -15185,6 +15185,18 @@ MSG_HASH(
    "下載失敗："
    )
 MSG_HASH(
+   MSG_DH_LIBRARY_DOWNLOADING,
+   "下載中："
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_DOWNLOAD_COMPLETE,
+   "下載完成："
+   )
+MSG_HASH( /* Game name, percent already downloaded */
+   MSG_DH_LIBRARY_DOWNLOAD_INTERRUPTED,
+   "下載中斷：%s，再按一次下載可從 %u%% 續傳"
+   )
+MSG_HASH(
    MSG_DH_LIBRARY_NOT_ENOUGH_SPACE,
    "儲存空間不足："
    )

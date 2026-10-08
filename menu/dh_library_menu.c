@@ -25,10 +25,11 @@
  * Directory listings are fetched asynchronously with
  * task_push_http_transfer() and kept in a small cache,
  * so that going back to a parent folder is instant.
- * Downloads use task_push_http_transfer_file() (with
- * progress display); the callback writes the file to
+ * A download is a single task that fetches the file in
+ * Range chunks into a .part file, showing the overall
+ * progress in one notification; the finished file is
  *   <Downloads dir>/DHGameCenter/<share path>
- * and adds it to the system playlist. */
+ * and is added to the system playlist. */
 
 #include <stdlib.h>
 #include <string.h>
@@ -38,6 +39,10 @@
 #include <file/file_path.h>
 #include <streams/file_stream.h>
 #include <retro_miscellaneous.h>
+#include <retro_timers.h>
+#include <lists/string_list.h>
+#include <net/net_http.h>
+#include <queues/task_queue.h>
 
 #ifdef HAVE_CONFIG_H
 #include "../config.h"
@@ -60,7 +65,6 @@
 #include "../command.h"
 #include "../verbosity.h"
 #include "../file_path_special.h"
-#include "../tasks/task_file_transfer.h"
 #include "../tasks/tasks_internal.h"
 #include "../network/dh_library.h"
 
@@ -69,8 +73,8 @@
 /* Keep some head room when checking free space */
 #define DH_MENU_SPACE_MARGIN (16 * 1024 * 1024)
 /* Files are downloaded with HTTP Range requests of this
- * size, since the HTTP task keeps a whole response in
- * memory (PSP images are 1-2 GB) */
+ * size, since net_http keeps a whole response in memory
+ * (PSP images are 1-2 GB) */
 #define DH_MENU_CHUNK_SIZE (64 * 1024 * 1024)
 /* Listing sizes are rounded up to the disk block size */
 #define DH_MENU_SIZE_TOLERANCE (64 * 1024)
@@ -101,12 +105,25 @@ typedef struct dh_menu_view_item
    bool downloaded;
 } dh_menu_view_item_t;
 
+enum dh_download_result
+{
+   DH_DOWNLOAD_INTERRUPTED = 0, /* Can be resumed */
+   DH_DOWNLOAD_DONE,
+   DH_DOWNLOAD_FAILED,          /* HTTP error */
+   DH_DOWNLOAD_WRITE_FAILED
+};
+
 typedef struct dh_menu_download
 {
    const dh_library_system_t *system;
+   struct http_t *http; /* Pending chunk request */
    uint64_t size;   /* From the listing (rounded up to disk blocks) */
+   uint64_t total;  /* From Content-Range, 0 until known */
    uint64_t offset; /* Bytes already written to the .part file */
    uint64_t requested; /* Length of the pending range request */
+   enum dh_download_result result;
+   int http_status;
+   unsigned shown_percent;
    char name[NAME_MAX_LENGTH];
    char url[DH_MENU_URL_LEN];
    char local_path[PATH_MAX_LENGTH];
@@ -624,21 +641,94 @@ static bool dh_menu_part_write(const char *path, uint64_t offset,
    return ok;
 }
 
-static void dh_menu_cb_download(retro_task_t *task,
-      void *task_data, void *user_data, const char *err);
+/* Parses the total size from 'Content-Range: bytes a-b/<total>'
+ * (also sent as 'bytes *\/<total>' with 416); 0 if unknown */
+static uint64_t dh_menu_content_range_total(const struct string_list *headers)
+{
+   size_t i;
 
-/* Requests the next chunk. The task title shows the
- * overall progress, the progress bar the chunk's.
- * Note: net_http only exposes response headers on
- * errors, so Content-Range can't be used; a chunk
- * shorter than requested marks the end of the file */
-static bool dh_menu_push_chunk(file_transfer_t *transf)
+   if (!headers)
+      return 0;
+
+   for (i = 0; i < headers->size; i++)
+   {
+      const char *line = headers->elems[i].data;
+      const char *slash;
+
+      if (     !line
+            || !string_starts_with_case_insensitive(line, "Content-Range:"))
+         continue;
+      if (     !(slash = strrchr(line, '/'))
+            || slash[1] < '0' || slash[1] > '9')
+         return 0;
+      return (uint64_t)strtoull(slash + 1, NULL, 10);
+   }
+
+   return 0;
+}
+
+/* Best known total size: Content-Range once a response
+ * arrived, the listing size (rounded up to disk blocks)
+ * until then */
+static uint64_t dh_menu_download_total(const dh_menu_download_t *dl)
+{
+   return dl->total ? dl->total : dl->size;
+}
+
+static unsigned dh_menu_download_percent(const dh_menu_download_t *dl,
+      uint64_t done)
+{
+   uint64_t total = dh_menu_download_total(dl);
+   uint64_t percent;
+
+   if (total == 0)
+      return 0;
+   percent = done * 100 / total;
+   /* 100% is only shown once the file is complete */
+   return (unsigned)(percent > 99 ? 99 : percent);
+}
+
+/* Replaces the title of the running task. Only this task's
+ * handler sets it; the old one is freed after the swap, under
+ * the lock that the notification code reads it with */
+static void dh_menu_download_set_title(retro_task_t *task, const char *title)
+{
+   char *old = task->title;
+   task_set_title(task, strdup(title));
+   if (old)
+      free(old);
+}
+
+/* 'Downloading: <name> (45%, 523.1 MB / 1.16 GB)' */
+static void dh_menu_download_show_progress(retro_task_t *task,
+      dh_menu_download_t *dl, uint64_t done)
+{
+   char cur[32];
+   char tot[32];
+   char title[NAME_MAX_LENGTH + 96];
+   unsigned percent = dh_menu_download_percent(dl, done);
+
+   /* Every new title is redrawn: only update on change */
+   if (percent == dl->shown_percent && task->title)
+      return;
+   dl->shown_percent = percent;
+
+   dh_library_format_size(done, cur, sizeof(cur));
+   dh_library_format_size(dh_menu_download_total(dl), tot, sizeof(tot));
+   snprintf(title, sizeof(title), "%s%s (%u%%, %s / %s)",
+         msg_hash_to_str(MSG_DH_LIBRARY_DOWNLOADING),
+         dl->name, percent, cur, tot);
+
+   task_set_progress(task, (int8_t)percent);
+   dh_menu_download_set_title(task, title);
+}
+
+/* Sends the Range request for the next chunk */
+static bool dh_menu_download_request(dh_menu_download_t *dl)
 {
    char headers[96];
-   char title[NAME_MAX_LENGTH + 64];
    size_t _len;
-   retro_task_t *task     = NULL;
-   dh_menu_download_t *dl = (dh_menu_download_t*)transf->user_data;
+   struct http_connection_t *conn;
 
    dl->requested = DH_MENU_CHUNK_SIZE;
 
@@ -649,119 +739,267 @@ static bool dh_menu_push_chunk(file_transfer_t *transf)
          headers + _len, sizeof(headers) - _len);
    strlcpy(headers + _len, "\r\n", sizeof(headers) - _len);
 
-   _len  = strlcpy(title, msg_hash_to_str(MSG_DOWNLOADING), sizeof(title));
-   _len += strlcpy(title + _len, ": ", sizeof(title) - _len);
-   _len += strlcpy(title + _len, dl->name, sizeof(title) - _len);
-   /* Listing sizes are approximate (rounded up to disk blocks) */
-   if (dl->size > 0 && _len < sizeof(title))
-   {
-      uint64_t percent = dl->offset * 100 / dl->size;
-      snprintf(title + _len, sizeof(title) - _len, " (%u%%)",
-            (unsigned)(percent > 99 ? 99 : percent));
-   }
-
-   /* Fails if the same URL is already being downloaded */
-   if (!(task = (retro_task_t*)task_push_http_transfer_with_headers(
-               dl->url, false, NULL, headers, dh_menu_cb_download, transf)))
+   if (!(conn = net_http_connection_new(dl->url, "GET", NULL)))
       return false;
+   net_http_connection_set_headers(conn, headers);
+   while (!net_http_connection_iterate(conn)) { }
+   if (net_http_connection_done(conn))
+      dl->http = net_http_new(conn);
+   net_http_connection_free(conn);
 
-   task_set_title(task, strdup(title));
-   return true;
+   return dl->http != NULL;
 }
 
-static void dh_menu_cb_download(retro_task_t *task,
-      void *task_data, void *user_data, const char *err)
+/* Handles a finished chunk response. Returns true when the
+ * download goes on (next chunk), false when 'dl->result'
+ * is final */
+static bool dh_menu_download_chunk_done(dh_menu_download_t *dl)
 {
-   http_transfer_data_t *data = (http_transfer_data_t*)task_data;
-   file_transfer_t *transf    = (file_transfer_t*)user_data;
-   dh_menu_download_t *dl     = transf ? (dh_menu_download_t*)transf->user_data : NULL;
-   bool last_chunk            = false;
+   size_t len                  = 0;
+   bool last_chunk             = false;
+   int status                  = net_http_status(dl->http);
+   /* The caller owns the body and the headers */
+   uint8_t *data               = net_http_data(dl->http, &len, true);
+   struct string_list *headers = net_http_headers(dl->http);
 
-   if (!dl)
-      goto end;
+   if (dl->total == 0)
+      dl->total = dh_menu_content_range_total(headers);
+   string_list_free(headers);
+   net_http_delete(dl->http);
+   dl->http = NULL;
 
-   if (err || !data)
-      goto failed;
-
-   switch (data->status)
+   switch (status)
    {
       case 206:
-         /* Partial content: a short chunk is the last one */
-         if (!data->data || data->len == 0)
-            goto failed;
-         last_chunk = ((uint64_t)data->len < dl->requested);
-         break;
+         /* Partial content: a short chunk (or reaching the
+          * total size) is the last one */
+         if (!data || len == 0)
+            break;
+         last_chunk =  ((uint64_t)len < dl->requested)
+                    || (dl->total > 0 && dl->offset + len >= dl->total);
+         goto write;
       case 200:
          /* Server ignored the range: this is the whole file */
-         if (!data->data)
-            goto failed;
+         if (!data)
+            break;
          dl->offset = 0;
+         dl->total  = (uint64_t)len;
          last_chunk = true;
-         break;
+         goto write;
       case 416:
-         /* Range not satisfiable: the .part file already
-          * holds the whole file (its size was a multiple of
-          * the chunk size, or a finished .part was resumed) */
+         /* Range not satisfiable: the .part file already holds
+          * the whole file (its size was a multiple of the chunk
+          * size, or a finished .part file was resumed) */
+         free(data);
          if (     dl->offset > 0
-               && (dl->size == 0 || dl->offset + DH_MENU_SIZE_TOLERANCE >= dl->size))
-            goto finished;
+               && (dl->total > 0
+                  ? dl->offset >= dl->total
+                  : (dl->size == 0
+                     || dl->offset + DH_MENU_SIZE_TOLERANCE >= dl->size)))
+         {
+            dl->result = DH_DOWNLOAD_DONE;
+            return false;
+         }
          /* Stale .part file, start over */
          if (dl->offset > 0)
          {
             filestream_delete(dl->part_path);
             dl->offset = 0;
-            if (dh_menu_push_chunk(transf))
-               return;
+            dl->total  = 0;
+            return true;
          }
-         goto failed;
+         dl->http_status = status;
+         dl->result      = DH_DOWNLOAD_FAILED;
+         return false;
       default:
-         goto failed;
+         /* -1: connection lost, worth resuming */
+         free(data);
+         dl->http_status = status;
+         dl->result      = (status > 0)
+               ? DH_DOWNLOAD_FAILED
+               : DH_DOWNLOAD_INTERRUPTED;
+         return false;
    }
 
-   if (!dh_menu_part_write(dl->part_path, dl->offset,
-            data->data, data->len))
+   /* Empty 206 or 200 */
+   free(data);
+   dl->http_status = status;
+   dl->result      = DH_DOWNLOAD_INTERRUPTED;
+   return false;
+
+write:
+   if (!dh_menu_part_write(dl->part_path, dl->offset, data, len))
    {
-      dh_menu_notify(MSG_DH_LIBRARY_WRITE_FAILED, dl->name);
-      goto end;
+      free(data);
+      dl->result = DH_DOWNLOAD_WRITE_FAILED;
+      return false;
    }
+   free(data);
+   dl->offset += (uint64_t)len;
 
-   dl->offset += (uint64_t)data->len;
-
-   if (!last_chunk)
+   if (last_chunk)
    {
-      if (dh_menu_push_chunk(transf))
-         return;
-      goto failed;
+      dl->result = DH_DOWNLOAD_DONE;
+      return false;
+   }
+   return true;
+}
+
+static void dh_menu_download_finish(retro_task_t *task,
+      dh_menu_download_t *dl)
+{
+   char title[NAME_MAX_LENGTH + 128];
+
+   if (dl->http)
+   {
+      string_list_free(net_http_headers(dl->http));
+      free(net_http_data(dl->http, NULL, true));
+      net_http_delete(dl->http);
+      dl->http = NULL;
    }
 
-finished:
    /* The .part file keeps an interrupted download from
     * looking like a finished one */
-   if (filestream_rename(dl->part_path, dl->local_path) != 0)
+   if (     dl->result == DH_DOWNLOAD_DONE
+         && filestream_rename(dl->part_path, dl->local_path) != 0)
+      dl->result = DH_DOWNLOAD_WRITE_FAILED;
+
+   switch (dl->result)
    {
-      dh_menu_notify(MSG_DH_LIBRARY_WRITE_FAILED, dl->name);
-      goto end;
+      case DH_DOWNLOAD_DONE:
+         snprintf(title, sizeof(title), "%s%s",
+               msg_hash_to_str(MSG_DH_LIBRARY_DOWNLOAD_COMPLETE), dl->name);
+         task_set_progress(task, 100);
+         RARCH_LOG("[DH Library] Saved: %s\n", dl->local_path);
+         break;
+      case DH_DOWNLOAD_WRITE_FAILED:
+         snprintf(title, sizeof(title), "%s%s",
+               msg_hash_to_str(MSG_DH_LIBRARY_WRITE_FAILED), dl->name);
+         break;
+      case DH_DOWNLOAD_FAILED:
+         snprintf(title, sizeof(title), "%s%s (HTTP %d)",
+               msg_hash_to_str(MSG_DH_LIBRARY_DOWNLOAD_FAILED),
+               dl->name, dl->http_status);
+         break;
+      case DH_DOWNLOAD_INTERRUPTED:
+      default:
+         /* The .part file is kept, a new download resumes from it */
+         snprintf(title, sizeof(title),
+               msg_hash_to_str(MSG_DH_LIBRARY_DOWNLOAD_INTERRUPTED),
+               dl->name, dh_menu_download_percent(dl, dl->offset));
+         break;
    }
 
-   RARCH_LOG("[DH Library] Saved: %s\n", dl->local_path);
+   if (dl->result != DH_DOWNLOAD_DONE)
+   {
+      RARCH_ERR("[DH Library] Download stopped (HTTP %d) at %u MB: %s\n",
+            dl->http_status, (unsigned)(dl->offset / (1024 * 1024)),
+            dl->name);
+      task_set_error(task, strdup(title));
+   }
 
-   dh_menu_playlist_add(dl->local_path, dl->system);
+   dh_menu_download_set_title(task, title);
+   task_set_flags(task, RETRO_TASK_FLG_FINISHED, true);
+}
 
-   if (dh_menu_top_is_ours())
-      dh_menu_request_refresh();
-   goto end;
+/* Runs on the task thread */
+static void dh_menu_download_handler(retro_task_t *task)
+{
+   size_t pos             = 0;
+   size_t tot             = 0;
+   dh_menu_download_t *dl = (dh_menu_download_t*)task->state;
 
-failed:
-   /* The .part file is kept, a new download resumes from it */
-   RARCH_ERR("[DH Library] Download failed (HTTP %d) at %u MB: %s\n",
-         data ? data->status : 0,
-         (unsigned)(dl->offset / (1024 * 1024)),
-         err ? err : "");
-   dh_menu_notify(MSG_DH_LIBRARY_DOWNLOAD_FAILED, dl->name);
+   if ((task_get_flags(task) & RETRO_TASK_FLG_CANCELLED) > 0)
+   {
+      dl->result = DH_DOWNLOAD_INTERRUPTED;
+      goto finish;
+   }
 
-end:
+   if (!dl->http)
+   {
+      if (!dh_menu_download_request(dl))
+      {
+         dl->result = DH_DOWNLOAD_INTERRUPTED;
+         goto finish;
+      }
+      return;
+   }
+
+   /* Same as the HTTP task: don't spin on the socket */
+   if (task_queue_is_threaded())
+      retro_sleep(1);
+
+   if (!net_http_update(dl->http, &pos, &tot))
+   {
+      if (dl->total == 0 && tot > 0)
+         dl->total = dh_menu_content_range_total(net_http_headers(dl->http));
+      dh_menu_download_show_progress(task, dl, dl->offset + pos);
+      return;
+   }
+
+   if (dh_menu_download_chunk_done(dl))
+   {
+      dh_menu_download_show_progress(task, dl, dl->offset);
+      return;
+   }
+
+finish:
+   dh_menu_download_finish(task, dl);
+}
+
+/* Runs on the main thread once the task is finished */
+static void dh_menu_cb_download(retro_task_t *task,
+      void *task_data, void *user_data, const char *err)
+{
+   dh_menu_download_t *dl = (dh_menu_download_t*)user_data;
+
+   if (!dl)
+      return;
+
+   if (dl->result == DH_DOWNLOAD_DONE)
+   {
+      dh_menu_playlist_add(dl->local_path, dl->system);
+      if (dh_menu_top_is_ours())
+         dh_menu_request_refresh();
+   }
+
    free(dl);
-   free(transf);
+}
+
+static bool dh_menu_download_finder(retro_task_t *task, void *user_data)
+{
+   if (task && task->handler == dh_menu_download_handler && user_data)
+      return string_is_equal(
+            ((dh_menu_download_t*)task->state)->local_path,
+            (const char*)user_data);
+   return false;
+}
+
+static bool dh_menu_download_push(dh_menu_download_t *dl)
+{
+   task_finder_data_t find_data;
+   retro_task_t *task;
+
+   /* The same file can't be downloaded twice at once */
+   find_data.func     = dh_menu_download_finder;
+   find_data.userdata = dl->local_path;
+   if (task_queue_find(&find_data))
+      return false;
+
+   if (!(task = task_init()))
+      return false;
+
+   dl->shown_percent = (unsigned)-1;
+   task->handler     = dh_menu_download_handler;
+   task->state       = dl;
+   task->callback    = dh_menu_cb_download;
+   task->user_data   = dl;
+   task->progress    = 0;
+   task->flags      |= RETRO_TASK_FLG_ALTERNATIVE_LOOK;
+   dh_menu_download_show_progress(task, dl, dl->offset);
+
+   task_queue_push(task);
+   return true;
 }
 
 static int dh_menu_download(const char *path, uint64_t size)
@@ -774,7 +1012,6 @@ static int dh_menu_download(const char *path, uint64_t size)
    const char *download_dir           = dh_menu_get_download_dir();
    const dh_library_system_t *system  = dh_library_find_system(path);
    dh_menu_download_t *dl             = NULL;
-   file_transfer_t *transf            = NULL;
    enum msg_hash_enums error          = MSG_UNKNOWN;
 
    if (!system)
@@ -865,22 +1102,14 @@ static int dh_menu_download(const char *path, uint64_t size)
       goto error;
    }
 
-   if (!(transf = (file_transfer_t*)calloc(1, sizeof(*transf))))
-      goto error;
-
-   transf->enum_idx  = MSG_UNKNOWN;
-   transf->user_data = dl;
-   strlcpy(transf->path, name, sizeof(transf->path));
-
    command_event(CMD_EVENT_NETWORK_INIT, NULL);
 
    RARCH_LOG("[DH Library] Downloading %s -> %s (from byte %u)\n",
          dl->url, dl->local_path, (unsigned)dl->offset);
 
-   if (!dh_menu_push_chunk(transf))
+   if (!dh_menu_download_push(dl))
    {
       dh_menu_notify(MSG_DH_LIBRARY_DOWNLOAD_IN_PROGRESS, name);
-      free(transf);
       goto error;
    }
 

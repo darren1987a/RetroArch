@@ -17061,6 +17061,18 @@ MSG_HASH(
    "Download failed: "
    )
 MSG_HASH(
+   MSG_DH_LIBRARY_DOWNLOADING,
+   "Downloading: "
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_DOWNLOAD_COMPLETE,
+   "Download complete: "
+   )
+MSG_HASH( /* Game name, percent already downloaded */
+   MSG_DH_LIBRARY_DOWNLOAD_INTERRUPTED,
+   "Download interrupted: %s. Select Download again to resume from %u%%."
+   )
+MSG_HASH(
    MSG_DH_LIBRARY_NOT_ENOUGH_SPACE,
    "Not enough storage space: "
    )
