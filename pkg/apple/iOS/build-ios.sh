@@ -9,7 +9,6 @@ set -euo pipefail
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 CORES_DIR="${CORES_DIR:-$APPLE_DIR/build/cores}"
 CORE_SRC="$CORES_DIR/pcsx_rearmed"
-PPSSPP_SRC="$CORES_DIR/ppsspp"
 JOBS="$(sysctl -n hw.ncpu)"
 
 # Pinned to a release tag of the core, not its development head
@@ -24,20 +23,32 @@ make -C "$CORE_SRC" -f Makefile.libretro platform=ios-arm64 \
     MINVERSION=-miphoneos-version-min=16.0 -j"$JOBS"
 cp "$CORE_SRC/pcsx_rearmed_libretro_ios.dylib" "$APPLE_DIR/iOS/modules/"
 
-# PSP: same recipe as libretro's own iOS CI for this core
+# PSP: same recipe as libretro's own iOS CI for this core. A local
+# checkout next to retroarch/ (the user's own fork) is preferred; it is
+# built out of tree, so nothing is written into it. Otherwise the
+# release tag is cloned.
 PPSSPP_TAG="${PPSSPP_TAG:-v1.20.4}"
-if [ ! -d "$PPSSPP_SRC" ] ; then
-    git clone --depth=1 --branch "$PPSSPP_TAG" --recurse-submodules --shallow-submodules \
-        https://github.com/hrydgard/ppsspp.git "$PPSSPP_SRC"
+if [ -z "${PPSSPP_SRC:-}" ] ; then
+    if [ -f "$APPLE_DIR/../../../ppsspp/libretro/libretro.cpp" ] ; then
+        PPSSPP_SRC="$(cd "$APPLE_DIR/../../../ppsspp" && pwd)"
+    else
+        PPSSPP_SRC="$CORES_DIR/ppsspp"
+        if [ ! -d "$PPSSPP_SRC" ] ; then
+            git clone --depth=1 --branch "$PPSSPP_TAG" --recurse-submodules --shallow-submodules \
+                https://github.com/hrydgard/ppsspp.git "$PPSSPP_SRC"
+        fi
+    fi
 fi
-cmake -S "$PPSSPP_SRC" -B "$PPSSPP_SRC/build/ios-arm64" \
+PPSSPP_BUILD="$CORES_DIR/ppsspp-build/$(echo "$PPSSPP_SRC" | shasum | cut -c1-8)"
+echo "PPSSPP source: $PPSSPP_SRC ($(git -C "$PPSSPP_SRC" describe --tags --always 2>/dev/null))"
+cmake -S "$PPSSPP_SRC" -B "$PPSSPP_BUILD" \
     -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
     -DCMAKE_C_FLAGS=-DIOS -DCMAKE_CXX_FLAGS=-DIOS -DIOS=ON \
     -DCMAKE_OSX_DEPLOYMENT_TARGET=16.0 -DCMAKE_SYSTEM_NAME=iOS \
     -DCMAKE_SYSTEM_PROCESSOR=arm64 -DCMAKE_OSX_ARCHITECTURES=arm64 \
-    -DCMAKE_TOOLCHAIN_FILE=cmake/Toolchains/ios.cmake -DLIBRETRO=ON
-cmake --build "$PPSSPP_SRC/build/ios-arm64" --target ppsspp_libretro -- -j"$JOBS"
-cp "$(find "$PPSSPP_SRC/build/ios-arm64" -maxdepth 3 -name ppsspp_libretro.dylib | head -1)" \
+    -DCMAKE_TOOLCHAIN_FILE="$PPSSPP_SRC/cmake/Toolchains/ios.cmake" -DLIBRETRO=ON
+cmake --build "$PPSSPP_BUILD" --target ppsspp_libretro -- -j"$JOBS"
+cp "$(find "$PPSSPP_BUILD" -maxdepth 3 -name ppsspp_libretro.dylib | head -1)" \
     "$APPLE_DIR/iOS/modules/ppsspp_libretro_ios.dylib"
 
 cd "$APPLE_DIR"
