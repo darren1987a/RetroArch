@@ -116,6 +116,27 @@ const dh_library_system_t *dh_library_find_system_folder(const char *folder);
 bool dh_library_get_local_path(const char *download_dir,
       const char *path, char *s, size_t len);
 
+/* Normalizes absolute path 'path' into 's': drops "." and
+ * repeated separators and resolves ".." (lexically, the path
+ * need not exist). Fails for relative paths and if ".." would
+ * go above the root */
+bool dh_library_normalize_path(const char *path, char *s, size_t len);
+
+/* Builds the normalized '<download_dir>/DHGameCenter' */
+bool dh_library_get_root(const char *download_dir, char *s, size_t len);
+
+/* Normalizes 'path' into 's'; returns true only if it lies
+ * strictly inside the (normalized) directory 'root' */
+bool dh_library_path_is_inside(const char *root, const char *path,
+      char *s, size_t len);
+
+/* Deletes the downloaded game 'path' (which must lie inside
+ * 'root', see dh_library_get_root()), a left over '.part'
+ * file and the parent directories left empty, up to 'root'
+ * (which is kept). Save files are elsewhere and untouched.
+ * Returns true if the game file is gone. */
+bool dh_library_delete_downloaded(const char *root, const char *path);
+
 /* Formats a byte count as e.g. "512.3 MB" */
 size_t dh_library_format_size(uint64_t size, char *s, size_t len);
 

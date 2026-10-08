@@ -30,6 +30,12 @@ RETRO_BEGIN_DECLS
 /* Appends the 'DH Game Library' entry to a main menu list */
 bool dh_library_menu_append_main_entry(file_list_t *list);
 
+/* Appends 'Delete Game File' to the actions of a playlist
+ * entry, only if its content was downloaded from the DH Game
+ * Library (inside <Downloads dir>/DHGameCenter) */
+bool dh_library_menu_append_delete_entry(file_list_t *list,
+      const char *content_path);
+
 /* Binds/overrides the menu callbacks of all
  * 'DH Game Library' entries and lists.
  * Called at the end of menu_cbs_init() */

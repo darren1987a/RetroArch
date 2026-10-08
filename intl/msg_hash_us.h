@@ -17061,6 +17061,42 @@ MSG_HASH(
    "Download failed: "
    )
 MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_DH_LIBRARY_DELETE,
+   "Delete Game File"
+   )
+MSG_HASH(
+   MENU_ENUM_SUBLABEL_DH_LIBRARY_DELETE,
+   "Delete this game, downloaded from the DH Game Library, from the device and from its playlist. Save files are kept."
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_DH_LIBRARY_DELETE_CONFIRM,
+   "Delete"
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_DH_LIBRARY_DELETE_CANCEL,
+   "Cancel"
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_DELETE_DOWNLOADED,
+   "Delete Downloaded Game"
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_DELETE_TITLE,
+   "Delete Game"
+   )
+MSG_HASH( /* Game name, size */
+   MSG_DH_LIBRARY_DELETE_PROMPT,
+   "Delete %s (%s)? Save files are kept."
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_DELETED,
+   "Deleted: "
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_DELETE_FAILED,
+   "Could not delete: "
+   )
+MSG_HASH(
    MSG_DH_LIBRARY_DOWNLOADING,
    "Downloading: "
    )

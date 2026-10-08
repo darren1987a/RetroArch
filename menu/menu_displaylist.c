@@ -4163,6 +4163,12 @@ static int menu_displaylist_parse_horizontal_content_actions(
                   msg_hash_to_str(MENU_ENUM_LABEL_DELETE_ENTRY),
                   MENU_ENUM_LABEL_DELETE_ENTRY,
                   MENU_SETTING_ACTION_DELETE_ENTRY, 0, 0, NULL);
+
+#ifdef HAVE_NETWORKING
+         /* DHGameCenter: delete a game downloaded from the DH Game Library */
+         if (entry)
+            dh_library_menu_append_delete_entry(list, entry->path);
+#endif
       }
 
       /* Skip 'Add to Favourites' if we are currently

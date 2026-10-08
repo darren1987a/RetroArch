@@ -22,6 +22,7 @@
 #include <compat/strl.h>
 #include <string/stdstring.h>
 #include <file/file_path.h>
+#include <streams/file_stream.h>
 #include <formats/rjson.h>
 
 #if defined(_WIN32) && !defined(_XBOX)
@@ -680,6 +681,151 @@ bool dh_library_get_local_path(const char *download_dir,
    }
 
    return count > 0;
+}
+
+static bool dh_library_is_sep(char c)
+{
+#ifdef _WIN32
+   return c == '/' || c == '\\';
+#else
+   return c == '/';
+#endif
+}
+
+bool dh_library_normalize_path(const char *path, char *s, size_t len)
+{
+   /* Offsets in 's' of the separator before each component,
+    * so that '..' can drop the last one */
+   size_t starts[256];
+   size_t depth = 0;
+   size_t _len  = 0;
+
+   if (string_is_empty(path) || !s || len < 4)
+      return false;
+
+   /* Root: '/' or a drive ('C:\'); relative paths are refused */
+   if (dh_library_is_sep(path[0]))
+      path++;
+#ifdef _WIN32
+   else if (isalpha((unsigned char)path[0]) && path[1] == ':'
+         && dh_library_is_sep(path[2]))
+   {
+      s[_len++] = path[0];
+      s[_len++] = ':';
+      path     += 3;
+   }
+#endif
+   else
+      return false;
+   s[_len] = '\0';
+
+   while (*path)
+   {
+      size_t comp_len = 0;
+
+      while (dh_library_is_sep(*path))
+         path++;
+      while (path[comp_len] && !dh_library_is_sep(path[comp_len]))
+         comp_len++;
+
+      if (comp_len == 0 || (comp_len == 1 && path[0] == '.'))
+         ;
+      else if (comp_len == 2 && path[0] == '.' && path[1] == '.')
+      {
+         /* Can't go above the root */
+         if (depth == 0)
+            return false;
+         _len    = starts[--depth];
+         s[_len] = '\0';
+      }
+      else
+      {
+         if (depth >= ARRAY_SIZE(starts) || _len + comp_len + 2 > len)
+            return false;
+         starts[depth++] = _len;
+         s[_len++]       = PATH_DEFAULT_SLASH_C();
+         memcpy(s + _len, path, comp_len);
+         _len           += comp_len;
+         s[_len]         = '\0';
+      }
+      path += comp_len;
+   }
+
+   /* The root itself */
+   if (_len == 0 || s[_len - 1] == ':')
+   {
+      s[_len++] = PATH_DEFAULT_SLASH_C();
+      s[_len]   = '\0';
+   }
+   return true;
+}
+
+bool dh_library_get_root(const char *download_dir, char *s, size_t len)
+{
+   char tmp[PATH_MAX_LENGTH];
+
+   if (     string_is_empty(download_dir)
+         || fill_pathname_join_special(tmp, download_dir,
+            DH_LIBRARY_DIR_NAME, sizeof(tmp)) >= sizeof(tmp))
+      return false;
+   return dh_library_normalize_path(tmp, s, len);
+}
+
+bool dh_library_path_is_inside(const char *root, const char *path,
+      char *s, size_t len)
+{
+   size_t root_len;
+
+   if (     string_is_empty(root)
+         || !dh_library_normalize_path(path, s, len))
+      return false;
+
+   root_len = strlen(root);
+   return    strncmp(s, root, root_len) == 0
+          && dh_library_is_sep(s[root_len])
+          && s[root_len + 1] != '\0';
+}
+
+bool dh_library_delete_downloaded(const char *root, const char *path)
+{
+   char root_norm[PATH_MAX_LENGTH];
+   char file[PATH_MAX_LENGTH];
+   char part[PATH_MAX_LENGTH];
+   size_t root_len;
+   size_t _len;
+
+   if (     !dh_library_normalize_path(root, root_norm, sizeof(root_norm))
+         || !dh_library_path_is_inside(root_norm, path, file, sizeof(file))
+         || path_is_directory(file))
+      return false;
+
+   if (path_is_valid(file))
+      filestream_delete(file);
+
+   /* A left over partial download */
+   strlcpy(part, file, sizeof(part));
+   if (strlcat(part, ".part", sizeof(part)) < sizeof(part)
+         && path_is_valid(part))
+      filestream_delete(part);
+
+   /* Parent directories left empty, up to the root (kept):
+    * deleting a directory that isn't empty fails */
+   root_len = strlen(root_norm);
+   _len     = strlen(file);
+   for (;;)
+   {
+      while (_len > 0 && !dh_library_is_sep(file[_len - 1]))
+         _len--;
+      if (_len == 0)
+         break;
+      file[--_len] = '\0';
+      if (_len <= root_len || filestream_delete(file) != 0)
+         break;
+   }
+
+   /* 'file' was truncated: check the game path again */
+   return dh_library_path_is_inside(root_norm, path, file, sizeof(file))
+       && !path_is_valid(file);
 }
 
 size_t dh_library_format_size(uint64_t size, char *s, size_t len)

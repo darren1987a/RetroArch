@@ -6758,3 +6758,19 @@ MSG_HASH(
    MENU_ENUM_LABEL_DH_LIBRARY_INFO,
    "dh_library_info"
    )
+MSG_HASH(
+   MENU_ENUM_LABEL_DH_LIBRARY_DELETE,
+   "dh_library_delete"
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_DH_LIBRARY_DELETE_CONFIRM,
+   "dh_library_delete_confirm"
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_DH_LIBRARY_DELETE_CANCEL,
+   "dh_library_delete_cancel"
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_DEFERRED_DH_LIBRARY_DELETE,
+   "deferred_dh_library_delete"
+   )

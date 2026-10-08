@@ -15185,6 +15185,42 @@ MSG_HASH(
    "下載失敗："
    )
 MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_DH_LIBRARY_DELETE,
+   "刪除遊戲檔案"
+   )
+MSG_HASH(
+   MENU_ENUM_SUBLABEL_DH_LIBRARY_DELETE,
+   "從裝置和播放清單刪除這款從 DH 遊戲庫下載的遊戲，存檔不會被刪除。"
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_DH_LIBRARY_DELETE_CONFIRM,
+   "確定刪除"
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_DH_LIBRARY_DELETE_CANCEL,
+   "取消"
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_DELETE_DOWNLOADED,
+   "刪除已下載的遊戲"
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_DELETE_TITLE,
+   "刪除遊戲"
+   )
+MSG_HASH( /* Game name, size */
+   MSG_DH_LIBRARY_DELETE_PROMPT,
+   "刪除《%s》（%s）？存檔不會被刪除"
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_DELETED,
+   "已刪除："
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_DELETE_FAILED,
+   "無法刪除："
+   )
+MSG_HASH(
    MSG_DH_LIBRARY_DOWNLOADING,
    "下載中："
    )

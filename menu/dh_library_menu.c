@@ -65,6 +65,7 @@
 #include "../command.h"
 #include "../verbosity.h"
 #include "../file_path_special.h"
+#include "../defaults.h"
 #include "../tasks/tasks_internal.h"
 #include "../network/dh_library.h"
 
@@ -142,6 +143,12 @@ typedef struct dh_menu_state
    uint64_t selected_size;
    char selected_path[PATH_MAX_LENGTH];
    char view_path[PATH_MAX_LENGTH];
+   /* Game file of the playlist entry whose actions are shown */
+   char playlist_game_path[PATH_MAX_LENGTH];
+   /* Game file of the 'Delete Game' page */
+   char delete_path[PATH_MAX_LENGTH];
+   /* The 'Delete Game' page was opened from a playlist entry */
+   bool delete_from_playlist;
 } dh_menu_state_t;
 
 static dh_menu_state_t dh_menu_st;
@@ -482,32 +489,29 @@ static const dh_menu_view_item_t *dh_menu_view_get_checked(
 
 /* Playlist */
 
-static void dh_menu_playlist_add(const char *local_path,
-      const dh_library_system_t *system)
+/* Builds the path of the playlist of 'system' */
+static bool dh_menu_playlist_path(const dh_library_system_t *system,
+      char *lpl_name, size_t lpl_name_len, char *s, size_t len)
 {
-   char lpl_name[NAME_MAX_LENGTH];
-   char lpl_path[PATH_MAX_LENGTH];
-   char entry_label[NAME_MAX_LENGTH];
-   playlist_config_t playlist_config;
-   size_t i;
-   playlist_t *playlist          = NULL;
-   playlist_t *cached_playlist   = NULL;
-   core_info_list_t *core_list   = NULL;
-   const core_info_t *core       = NULL;
-   settings_t *settings          = config_get_ptr();
-   struct menu_state *menu_st    = menu_state_get_ptr();
-   const char *dir_playlist      = settings->paths.directory_playlist;
+   settings_t *settings     = config_get_ptr();
+   const char *dir_playlist = settings->paths.directory_playlist;
 
    if (string_is_empty(dir_playlist))
    {
       RARCH_ERR("[DH Library] Playlist directory is not set.\n");
-      return;
+      return false;
    }
 
-   fill_pathname(lpl_name, system->playlist, ".lpl", sizeof(lpl_name));
-   fill_pathname_join_special(lpl_path, dir_playlist, lpl_name,
-         sizeof(lpl_path));
-   path_mkdir(dir_playlist);
+   fill_pathname(lpl_name, system->playlist, ".lpl", lpl_name_len);
+   fill_pathname_join_special(s, dir_playlist, lpl_name, len);
+   return true;
+}
+
+static playlist_t *dh_menu_playlist_open(const char *lpl_path)
+{
+   playlist_config_t playlist_config;
+   playlist_t *playlist = NULL;
+   settings_t *settings = config_get_ptr();
 
    memset(&playlist_config, 0, sizeof(playlist_config));
    playlist_config.capacity            = COLLECTION_SIZE;
@@ -520,10 +524,49 @@ static void dh_menu_playlist_add(const char *local_path,
    playlist_config_set_path(&playlist_config, lpl_path);
 
    if (!(playlist = playlist_init(&playlist_config)))
-   {
       RARCH_ERR("[DH Library] Failed to open playlist: %s\n", lpl_path);
-      return;
+   return playlist;
+}
+
+/* If the currently cached playlist was modified,
+ * it must be re-cached */
+static void dh_menu_playlist_recache(const char *lpl_path)
+{
+   playlist_t *cached_playlist = playlist_get_cached();
+
+   if (     cached_playlist
+         && string_is_equal(lpl_path, playlist_get_conf_path(cached_playlist)))
+   {
+      playlist_config_t cached_config;
+      if (playlist_config_copy(playlist_get_config(cached_playlist),
+               &cached_config))
+      {
+         playlist_free_cached();
+         playlist_init_cached(&cached_config);
+      }
    }
+}
+
+static void dh_menu_playlist_add(const char *local_path,
+      const dh_library_system_t *system)
+{
+   char lpl_name[NAME_MAX_LENGTH];
+   char lpl_path[PATH_MAX_LENGTH];
+   char entry_label[NAME_MAX_LENGTH];
+   size_t i;
+   playlist_t *playlist          = NULL;
+   core_info_list_t *core_list   = NULL;
+   const core_info_t *core       = NULL;
+   settings_t *settings          = config_get_ptr();
+   struct menu_state *menu_st    = menu_state_get_ptr();
+
+   if (!dh_menu_playlist_path(system, lpl_name, sizeof(lpl_name),
+            lpl_path, sizeof(lpl_path)))
+      return;
+   path_mkdir(settings->paths.directory_playlist);
+
+   if (!(playlist = dh_menu_playlist_open(lpl_path)))
+      return;
 
    /* Look up the default core by its file id
     * (e.g. 'pcsx_rearmed_libretro') */
@@ -574,20 +617,7 @@ static void dh_menu_playlist_add(const char *local_path,
 
    playlist_write_file(playlist);
    playlist_free(playlist);
-
-   /* If the currently cached playlist was modified,
-    * it must be re-cached */
-   if (     (cached_playlist = playlist_get_cached())
-         && string_is_equal(lpl_path, playlist_get_conf_path(cached_playlist)))
-   {
-      playlist_config_t cached_config;
-      if (playlist_config_copy(playlist_get_config(cached_playlist),
-               &cached_config))
-      {
-         playlist_free_cached();
-         playlist_init_cached(&cached_config);
-      }
-   }
+   dh_menu_playlist_recache(lpl_path);
 
    /* New playlists must show up in the menu tabs */
    if (menu_st->driver_ctx && menu_st->driver_ctx->environ_cb)
@@ -595,6 +625,131 @@ static void dh_menu_playlist_add(const char *local_path,
             NULL, menu_st->userdata);
 
    dh_menu_notify(MSG_DH_LIBRARY_ADDED_TO_PLAYLIST, system->playlist);
+}
+
+/* Delete */
+
+/* Normalizes 'content_path' (a playlist path may start with '~'
+ * or point inside an archive) into 's', the game file, and
+ * returns true only if it lies inside 'root', the normalized
+ * '<Downloads dir>/DHGameCenter' */
+static bool dh_menu_get_owned_path(const char *content_path,
+      char *root, size_t root_len, char *s, size_t len)
+{
+   char dir[PATH_MAX_LENGTH];
+   char path[PATH_MAX_LENGTH];
+   char *delim;
+   const char *download_dir = dh_menu_get_download_dir();
+
+   if (string_is_empty(download_dir) || string_is_empty(content_path))
+      return false;
+
+   fill_pathname_expand_special(dir, download_dir, sizeof(dir));
+   fill_pathname_expand_special(path, content_path, sizeof(path));
+   if ((delim = (char*)path_get_archive_delim(path)))
+      *delim = '\0';
+
+   if (     dh_library_get_root(dir, root, root_len)
+         && dh_library_path_is_inside(root, path, s, len))
+      return true;
+
+   /* Same location through a symlink
+    * (e.g. /var -> /private/var on iOS) */
+   return   path_resolve_realpath(dir, sizeof(dir), true)
+         && path_resolve_realpath(path, sizeof(path), true)
+         && dh_library_get_root(dir, root, root_len)
+         && dh_library_path_is_inside(root, path, s, len);
+}
+
+/* Removes 'path' from the playlist of 'system' and from
+ * the history and favourites */
+static void dh_menu_playlist_remove(const char *path,
+      const dh_library_system_t *system)
+{
+   char lpl_name[NAME_MAX_LENGTH];
+   char lpl_path[PATH_MAX_LENGTH];
+   size_t i;
+   playlist_t *defaults[2];
+
+   if (     system
+         && dh_menu_playlist_path(system, lpl_name, sizeof(lpl_name),
+            lpl_path, sizeof(lpl_path))
+         && path_is_valid(lpl_path))
+   {
+      playlist_t *playlist = dh_menu_playlist_open(lpl_path);
+      if (playlist)
+      {
+         if (playlist_entry_exists(playlist, path))
+         {
+            playlist_delete_by_path(playlist, path);
+            playlist_write_file(playlist);
+         }
+         playlist_free(playlist);
+         dh_menu_playlist_recache(lpl_path);
+      }
+   }
+
+   defaults[0] = g_defaults.content_history;
+   defaults[1] = g_defaults.content_favorites;
+   for (i = 0; i < ARRAY_SIZE(defaults); i++)
+   {
+      if (defaults[i] && playlist_entry_exists(defaults[i], path))
+      {
+         playlist_delete_by_path(defaults[i], path);
+         playlist_write_file(defaults[i]);
+         dh_menu_playlist_recache(playlist_get_conf_path(defaults[i]));
+      }
+   }
+}
+
+/* Deletes a game downloaded from the DH Game Library: the file,
+ * a left over .part file, its playlist entries and the folders
+ * left empty. Save files and BIOS files are not touched. */
+static bool dh_menu_delete_game(const char *content_path)
+{
+   char root[PATH_MAX_LENGTH];
+   char path[PATH_MAX_LENGTH];
+   char share_path[PATH_MAX_LENGTH];
+   char *c;
+   bool ok;
+
+   if (!dh_menu_get_owned_path(content_path, root, sizeof(root),
+            path, sizeof(path)))
+   {
+      dh_menu_notify(MSG_DH_LIBRARY_INVALID_PATH, content_path);
+      return false;
+   }
+
+   /* '/PSPGame/x.iso': the system of the game */
+   strlcpy(share_path, path + strlen(root), sizeof(share_path));
+   for (c = share_path; *c; c++)
+      if (*c == '\\')
+         *c = '/';
+
+   /* Playlists first: the entries are matched
+    * against the real path of the file */
+   dh_menu_playlist_remove(path, dh_library_find_system(share_path));
+   ok = dh_library_delete_downloaded(root, path);
+
+   RARCH_LOG("[DH Library] Delete %s: %s\n", path, ok ? "done" : "failed");
+   dh_menu_notify(ok ? MSG_DH_LIBRARY_DELETED : MSG_DH_LIBRARY_DELETE_FAILED,
+         path_basename(path));
+   return ok;
+}
+
+static uint64_t dh_menu_file_size(const char *path)
+{
+   int64_t size = 0;
+   /* Not path_get_size(): 32 bit */
+   RFILE *file  = filestream_open(path,
+         RETRO_VFS_FILE_ACCESS_READ, RETRO_VFS_FILE_ACCESS_HINT_NONE);
+
+   if (file)
+   {
+      size = filestream_get_size(file);
+      filestream_close(file);
+   }
+   return size > 0 ? (uint64_t)size : 0;
 }
 
 /* Download */
@@ -1200,6 +1355,72 @@ static int dh_menu_action_ok_info(const char *path,
    return 0;
 }
 
+/* 'Delete Game File' (playlist entry) or 'Delete Downloaded
+ * Game' (file page): opens the confirmation page */
+static int dh_menu_action_ok_delete(const char *path,
+      const char *label, unsigned type, size_t idx, size_t entry_idx)
+{
+   const char *menu_path  = NULL;
+   const char *menu_label = NULL;
+   const char *download_dir = dh_menu_get_download_dir();
+
+   menu_entries_get_last_stack(&menu_path, &menu_label, NULL, NULL, NULL);
+
+   dh_menu_st.delete_from_playlist = !string_is_equal(menu_label,
+         msg_hash_to_str(MENU_ENUM_LABEL_DEFERRED_DH_LIBRARY_FILE));
+
+   if (dh_menu_st.delete_from_playlist)
+      strlcpy(dh_menu_st.delete_path, dh_menu_st.playlist_game_path,
+            sizeof(dh_menu_st.delete_path));
+   else if (    string_is_empty(download_dir)
+            || !dh_library_get_local_path(download_dir, menu_path,
+               dh_menu_st.delete_path, sizeof(dh_menu_st.delete_path)))
+      return -1;
+
+   if (string_is_empty(dh_menu_st.delete_path))
+      return -1;
+
+   return dh_menu_push_list(dh_menu_st.delete_path,
+         msg_hash_to_str(MENU_ENUM_LABEL_DEFERRED_DH_LIBRARY_DELETE),
+         FILE_TYPE_NONE, idx);
+}
+
+static void dh_menu_pop(unsigned levels)
+{
+   struct menu_state *menu_st = menu_state_get_ptr();
+   size_t new_selection_ptr   = menu_st->selection_ptr;
+
+   while (levels--)
+      menu_entries_pop_stack(&new_selection_ptr, 0, true);
+   menu_st->selection_ptr     = new_selection_ptr;
+
+   /* The playlist entry may be gone: thumbnails
+    * must be refreshed */
+   if (menu_st->driver_ctx && menu_st->driver_ctx->refresh_thumbnail_image)
+      menu_st->driver_ctx->refresh_thumbnail_image(
+            menu_st->userdata, (unsigned)new_selection_ptr);
+}
+
+static int dh_menu_action_ok_delete_confirm(const char *path,
+      const char *label, unsigned type, size_t idx, size_t entry_idx)
+{
+   dh_menu_delete_game(dh_menu_st.delete_path);
+   dh_menu_st.delete_path[0] = '\0';
+
+   /* Back to the playlist (the entry's actions refer to a
+    * removed entry) or to the file page (now 'Download') */
+   dh_menu_pop(dh_menu_st.delete_from_playlist ? 2 : 1);
+   dh_menu_request_refresh();
+   return 0;
+}
+
+static int dh_menu_action_ok_delete_cancel(const char *path,
+      const char *label, unsigned type, size_t idx, size_t entry_idx)
+{
+   dh_menu_pop(1);
+   return 0;
+}
+
 static size_t dh_menu_get_value_entry(file_list_t *list,
       unsigned *w, unsigned type, unsigned i,
       const char *label, char *s, size_t len,
@@ -1291,6 +1512,9 @@ static int dh_menu_sublabel_generic(file_list_t *list,
       case MENU_ENUM_LABEL_DH_LIBRARY_RETRY:
          sublabel = MENU_ENUM_SUBLABEL_DH_LIBRARY_RETRY;
          break;
+      case MENU_ENUM_LABEL_DH_LIBRARY_DELETE:
+         sublabel = MENU_ENUM_SUBLABEL_DH_LIBRARY_DELETE;
+         break;
       default:
          break;
    }
@@ -1309,6 +1533,12 @@ static int dh_menu_get_title(const char *path, const char *label,
             msg_hash_to_str(MENU_ENUM_LABEL_DEFERRED_DH_LIBRARY_FILE)))
    {
       strlcpy(s, path_basename(path), len);
+      return 0;
+   }
+   if (string_is_equal(label,
+            msg_hash_to_str(MENU_ENUM_LABEL_DEFERRED_DH_LIBRARY_DELETE)))
+   {
+      strlcpy(s, msg_hash_to_str(MSG_DH_LIBRARY_DELETE_TITLE), len);
       return 0;
    }
 
@@ -1495,6 +1725,13 @@ static int dh_menu_deferred_push_file(menu_displaylist_info_t *info)
          MENU_ENUM_LABEL_DH_LIBRARY_DOWNLOAD,
          MENU_SETTING_ACTION, 0, 0, NULL);
 
+   if (downloaded)
+      menu_entries_append(info->list,
+            msg_hash_to_str(MSG_DH_LIBRARY_DELETE_DOWNLOADED),
+            msg_hash_to_str(MENU_ENUM_LABEL_DH_LIBRARY_DELETE),
+            MENU_ENUM_LABEL_DH_LIBRARY_DELETE,
+            MENU_SETTING_ACTION, 0, 0, NULL);
+
    if (     string_is_equal(path, dh_menu_st.selected_path)
          && dh_menu_st.selected_size > 0)
    {
@@ -1517,7 +1754,68 @@ static int dh_menu_deferred_push_file(menu_displaylist_info_t *info)
    return 0;
 }
 
+/* 'Delete Game' page: 'Delete <name> (1.2 GB)? Save files
+ * are kept.', then 'Delete' and 'Cancel' */
+static int dh_menu_deferred_push_delete(menu_displaylist_info_t *info)
+{
+   char size[32];
+   char name[NAME_MAX_LENGTH];
+   char prompt[NAME_MAX_LENGTH + 128];
+   char part_path[PATH_MAX_LENGTH];
+   const char *path = info->path;
+
+   menu_entries_clear(info->list);
+
+   strlcpy(part_path, path, sizeof(part_path));
+   strlcat(part_path, ".part", sizeof(part_path));
+   dh_library_format_size(dh_menu_file_size(path)
+         + dh_menu_file_size(part_path), size, sizeof(size));
+   fill_pathname(name, path_basename(path), "", sizeof(name));
+   snprintf(prompt, sizeof(prompt),
+         msg_hash_to_str(MSG_DH_LIBRARY_DELETE_PROMPT), name, size);
+
+   menu_entries_append(info->list, prompt,
+         msg_hash_to_str(MENU_ENUM_LABEL_DH_LIBRARY_INFO),
+         MENU_ENUM_LABEL_DH_LIBRARY_INFO,
+         FILE_TYPE_NONE, 0, 0, NULL);
+   menu_entries_append(info->list,
+         msg_hash_to_str(MENU_ENUM_LABEL_VALUE_DH_LIBRARY_DELETE_CONFIRM),
+         msg_hash_to_str(MENU_ENUM_LABEL_DH_LIBRARY_DELETE_CONFIRM),
+         MENU_ENUM_LABEL_DH_LIBRARY_DELETE_CONFIRM,
+         MENU_SETTING_ACTION, 0, 0, NULL);
+   menu_entries_append(info->list,
+         msg_hash_to_str(MENU_ENUM_LABEL_VALUE_DH_LIBRARY_DELETE_CANCEL),
+         msg_hash_to_str(MENU_ENUM_LABEL_DH_LIBRARY_DELETE_CANCEL),
+         MENU_ENUM_LABEL_DH_LIBRARY_DELETE_CANCEL,
+         MENU_SETTING_ACTION, 0, 0, NULL);
+
+   /* The selection starts on the prompt, not on 'Delete' */
+   info->flags |= MD_FLAG_NEED_REFRESH | MD_FLAG_NEED_PUSH;
+   menu_displaylist_process(info);
+   return 0;
+}
+
 /* Public */
+
+bool dh_library_menu_append_delete_entry(file_list_t *list,
+      const char *content_path)
+{
+   char root[PATH_MAX_LENGTH];
+
+   if (!dh_menu_get_owned_path(content_path, root, sizeof(root),
+            dh_menu_st.playlist_game_path,
+            sizeof(dh_menu_st.playlist_game_path)))
+   {
+      dh_menu_st.playlist_game_path[0] = '\0';
+      return false;
+   }
+
+   return menu_entries_append(list,
+         msg_hash_to_str(MENU_ENUM_LABEL_VALUE_DH_LIBRARY_DELETE),
+         msg_hash_to_str(MENU_ENUM_LABEL_DH_LIBRARY_DELETE),
+         MENU_ENUM_LABEL_DH_LIBRARY_DELETE,
+         MENU_SETTING_ACTION, 0, 0, NULL);
+}
 
 bool dh_library_menu_append_main_entry(file_list_t *list)
 {
@@ -1546,6 +1844,13 @@ void dh_library_menu_cbs_init(menu_file_list_cbs_t *cbs,
             msg_hash_to_str(MENU_ENUM_LABEL_DEFERRED_DH_LIBRARY_FILE)))
    {
       cbs->action_deferred_push = dh_menu_deferred_push_file;
+      cbs->action_get_title     = dh_menu_get_title;
+      return;
+   }
+   if (string_is_equal(label,
+            msg_hash_to_str(MENU_ENUM_LABEL_DEFERRED_DH_LIBRARY_DELETE)))
+   {
+      cbs->action_deferred_push = dh_menu_deferred_push_delete;
       cbs->action_get_title     = dh_menu_get_title;
       return;
    }
@@ -1585,6 +1890,21 @@ void dh_library_menu_cbs_init(menu_file_list_cbs_t *cbs,
          break;
       case MENU_ENUM_LABEL_DH_LIBRARY_INFO:
          cbs->action_ok        = dh_menu_action_ok_info;
+         cbs->action_get_value = dh_menu_get_value_none;
+         cbs->action_sublabel  = NULL;
+         break;
+      case MENU_ENUM_LABEL_DH_LIBRARY_DELETE:
+         cbs->action_ok        = dh_menu_action_ok_delete;
+         cbs->action_get_value = dh_menu_get_value_none;
+         cbs->action_sublabel  = dh_menu_sublabel_generic;
+         break;
+      case MENU_ENUM_LABEL_DH_LIBRARY_DELETE_CONFIRM:
+         cbs->action_ok        = dh_menu_action_ok_delete_confirm;
+         cbs->action_get_value = dh_menu_get_value_none;
+         cbs->action_sublabel  = NULL;
+         break;
+      case MENU_ENUM_LABEL_DH_LIBRARY_DELETE_CANCEL:
+         cbs->action_ok        = dh_menu_action_ok_delete_cancel;
          cbs->action_get_value = dh_menu_get_value_none;
          cbs->action_sublabel  = NULL;
          break;
