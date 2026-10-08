@@ -509,6 +509,42 @@ enum
 @end
 #endif
 
+API_AVAILABLE(ios(13.0), tvos(13.0))
+@interface RetroArchSceneDelegate : UIResponder <UIWindowSceneDelegate>
+@end
+@implementation RetroArchSceneDelegate
+
+- (void)scene:(UIScene *)scene willConnectToSession:(UISceneSession *)session options:(UISceneConnectionOptions *)connectionOptions {
+   RetroArch_iOS *app = [RetroArch_iOS get];
+   app.window = [[UIWindow alloc] initWithWindowScene:(UIWindowScene *)scene];
+
+   [app.window makeKeyAndVisible];
+}
+
+- (void)sceneDidBecomeActive:(UIScene *)scene {
+   RetroArch_iOS *app = [RetroArch_iOS get];
+   [app applicationDidBecomeActive:[UIApplication sharedApplication]];
+}
+
+- (void)sceneWillResignActive:(UIScene *)scene {
+   RetroArch_iOS *app = [RetroArch_iOS get];
+   [app applicationWillResignActive:[UIApplication sharedApplication]];
+}
+
+- (void)sceneDidEnterBackground:(UIScene *)scene {
+   RetroArch_iOS *app = [RetroArch_iOS get];
+   [app applicationDidEnterBackground:[UIApplication sharedApplication]];
+}
+
+- (void)scene:(UIScene *)scene openURLContexts:(NSSet<UIOpenURLContext *> *)URLContexts {
+   RetroArch_iOS *app = [RetroArch_iOS get];
+   for (UIOpenURLContext *urlContext in URLContexts) {
+      [app application:(UIApplication *)app openURL:urlContext.URL options:@{}];
+   }
+}
+
+@end
+
 #if TARGET_OS_IOS
 @interface RetroArch_iOS () <MXMetricManagerSubscriber, UIPointerInteractionDelegate>
 @end
@@ -1080,7 +1116,6 @@ enum
 
 #if TARGET_OS_IOS
    [self setToolbarHidden:true animated:NO];
-   [[UIApplication sharedApplication] setStatusBarHidden:true withAnimation:UIStatusBarAnimationNone];
    [[UIApplication sharedApplication] setIdleTimerDisabled:true];
 #endif
 
