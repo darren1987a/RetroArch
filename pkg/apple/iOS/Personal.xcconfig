@@ -1,0 +1,10 @@
+// Personal sideload build (PS1 via PCSX ReARMed). Pass with: xcodebuild -xcconfig iOS/Personal.xcconfig
+DEVELOPMENT_TEAM = F2R8FQ3WNK
+CODE_SIGN_STYLE = Automatic
+CODE_SIGN_IDENTITY = Apple Development
+PROVISIONING_PROFILE_SPECIFIER =
+IOS_BUNDLE_IDENTIFIER = com.darrenhuang.RetroArchPS1
+RA_IPHONEOS_DEPLOYMENT_TARGET = 16.0
+IPHONEOS_DEPLOYMENT_TARGET = 16.0
+// Bump on each build that changes assets.zip so it is re-extracted on update
+CURRENT_PROJECT_VERSION = 2

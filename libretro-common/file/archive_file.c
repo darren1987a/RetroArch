@@ -370,6 +370,72 @@ bool file_archive_extract_file(
    return false;
 }
 
+static int file_archive_extract_all_cb(const char *name,
+      const char *valid_exts, const uint8_t *cdata,
+      unsigned cmode, uint32_t csize, uint32_t size,
+      uint32_t checksum, struct archive_extract_userdata *userdata)
+{
+   union string_list_elem_attr attr;
+   char new_path[PATH_MAX_LENGTH];
+   size_t _len = strlen(name);
+
+   /* Skip directory entries; members are flattened into one directory,
+    * which is where a cue sheet expects its tracks anyway */
+   if (_len == 0 || name[_len - 1] == '/' || name[_len - 1] == '\\')
+      return 1;
+
+   fill_pathname_join_special(new_path, userdata->extraction_directory,
+         path_basename(name), sizeof(new_path));
+
+   if (!file_archive_perform_mode(new_path, valid_exts, cdata, cmode,
+            csize, size, checksum, userdata))
+      return 0;
+
+   attr.i = 0;
+   if (!string_list_append(userdata->list, new_path, attr))
+      return 0;
+
+   userdata->found_file = true;
+   return 1;
+}
+
+/**
+ * file_archive_extract_all:
+ * @archive_path                : filename path to archive (any member
+ *                                selected with '#' is ignored).
+ * @extraction_directory        : existing directory to extract into.
+ * @extracted                   : receives the path of every extracted
+ *                                file, including those written before
+ *                                a failure, so the caller can clean up.
+ *
+ * Extracts every member of the archive. Multi-file content such as a
+ * cue sheet with its tracks needs all of them side by side.
+ *
+ * Returns : true (1) on success, otherwise false (0).
+ **/
+bool file_archive_extract_all(const char *archive_path,
+      const char *extraction_directory, struct string_list *extracted)
+{
+   struct archive_extract_userdata userdata;
+   char path[PATH_MAX_LENGTH];
+   char *delim;
+
+   if (!extracted)
+      return false;
+
+   strlcpy(path, archive_path, sizeof(path));
+   if ((delim = (char*)path_get_archive_delim(path)))
+      *delim = '\0';
+
+   memset(&userdata, 0, sizeof(userdata));
+   userdata.extraction_directory = extraction_directory;
+   userdata.list                 = extracted;
+
+   return file_archive_walk(path, NULL,
+         file_archive_extract_all_cb, &userdata)
+      && userdata.found_file;
+}
+
 /* Warning: 'list' must zero initialised before
  * calling this function, otherwise memory leaks/
  * undefined behaviour will occur */

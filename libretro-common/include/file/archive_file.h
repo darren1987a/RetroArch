@@ -163,6 +163,17 @@ bool file_archive_extract_file(const char *archive_path,
       const char *valid_exts, const char *extraction_dir,
       char *out_path, size_t len);
 
+/**
+ * file_archive_extract_all:
+ *
+ * Extracts every member of the archive into @extraction_directory and
+ * appends each written path to @extracted.
+ *
+ * Returns : true (1) on success, otherwise false (0).
+ **/
+bool file_archive_extract_all(const char *archive_path,
+      const char *extraction_directory, struct string_list *extracted);
+
 /* Warning: 'list' must zero initialised before
  * calling this function, otherwise memory leaks/
  * undefined behaviour will occur */

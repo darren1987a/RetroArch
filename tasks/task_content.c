@@ -748,6 +748,136 @@ static size_t content_file_load_into_memory(
 }
 
 #ifdef HAVE_COMPRESSION
+/* Extensions of files that name other files of the same disc set,
+ * most preferred first: an m3u lists cue sheets, a cue sheet lists
+ * its tracks. */
+static const char *content_file_sheet_exts[] = {
+   "m3u", "cue", "ccd", "toc", "gdi", NULL
+};
+
+static bool content_file_is_sheet(const char *path)
+{
+   const char *ext = path_get_extension(path);
+   unsigned i;
+
+   if (!ext)
+      return false;
+
+   for (i = 0; content_file_sheet_exts[i]; i++)
+      if (string_is_equal_noncase(ext, content_file_sheet_exts[i]))
+         return true;
+
+   return false;
+}
+
+/* Finds the sheet to load out of an archive holding a multi-file
+ * disc set, writing its basename to @s. A member picked explicitly
+ * ("game.7z#game.cue") wins; one that is not a sheet means the user
+ * wants exactly that file, so the set is not treated as one. */
+static bool content_file_archive_find_sheet(const char *archive_path,
+      char *s, size_t len)
+{
+   struct string_list *list;
+   const char *delim = path_get_archive_delim(archive_path);
+   bool found        = false;
+   unsigned i;
+
+   if (delim)
+   {
+      if (!content_file_is_sheet(delim + 1))
+         return false;
+      strlcpy(s, path_basename(delim + 1), len);
+      return true;
+   }
+
+   if (!(list = file_archive_get_file_list(archive_path, NULL)))
+      return false;
+
+   for (i = 0; content_file_sheet_exts[i] && !found; i++)
+   {
+      size_t j;
+      for (j = 0; j < list->size; j++)
+      {
+         const char *ext = path_get_extension(list->elems[j].data);
+         if (ext && string_is_equal_noncase(ext, content_file_sheet_exts[i]))
+         {
+            strlcpy(s, path_basename(list->elems[j].data), len);
+            found = true;
+            break;
+         }
+      }
+   }
+
+   string_list_free(list);
+   return found;
+}
+
+/* Extracts the whole archive into a directory of its own and points
+ * @out at the registered path of the sheet named @sheet. Every extracted file, and the
+ * directory after them, is registered as temporary so teardown
+ * removes all of it. */
+static bool content_file_extract_disc_set(
+      content_information_ctx_t *content_ctx,
+      content_state_t *p_content, const char *archive_path,
+      const char *sheet, const char **out)
+{
+   struct string_list extracted = {0};
+   char tmp_path[PATH_MAX_LENGTH];
+   char tmp_dir[PATH_MAX_LENGTH];
+   const char *sheet_ptr        = NULL;
+   size_t _len;
+   unsigned i;
+   bool ok;
+
+   /* A directory of our own keeps the set together and away from
+    * files that are already in the cache or beside the archive */
+   if (!string_is_empty(content_ctx->directory_cache))
+   {
+      strlcpy(tmp_dir, content_ctx->directory_cache, sizeof(tmp_dir));
+      fill_pathname_slash(tmp_dir, sizeof(tmp_dir));
+   }
+   else
+      fill_pathname_basedir(tmp_dir, archive_path, sizeof(tmp_dir));
+
+   _len = strlen(tmp_dir);
+   for (i = 0; i < 1024; i++)
+   {
+      snprintf(tmp_dir + _len, sizeof(tmp_dir) - _len, ".extract-%u", i);
+      if (!path_is_valid(tmp_dir))
+         break;
+   }
+
+   if (i == 1024 || !path_mkdir(tmp_dir))
+      return false;
+
+   if (!string_list_initialize(&extracted))
+   {
+      filestream_delete(tmp_dir);
+      return false;
+   }
+
+   ok = file_archive_extract_all(archive_path, tmp_dir, &extracted);
+   fill_pathname_join_special(tmp_path, tmp_dir, sheet, sizeof(tmp_path));
+   ok = ok && path_is_valid(tmp_path);
+
+   for (i = 0; i < extracted.size; i++)
+   {
+      const char *ptr = content_file_list_append_temporary(
+            p_content->content_list, extracted.elems[i].data);
+      if (ptr && string_is_equal(extracted.elems[i].data, tmp_path))
+         sheet_ptr = ptr;
+   }
+   content_file_list_append_temporary(p_content->content_list, tmp_dir);
+
+   string_list_deinitialize(&extracted);
+
+   if (!ok || !sheet_ptr)
+      return false;
+
+   *out = sheet_ptr;
+   return true;
+}
+
 static bool content_file_extract_from_archive(
       content_information_ctx_t *content_ctx,
       content_state_t *p_content,
@@ -763,6 +893,32 @@ static bool content_file_extract_from_archive(
    /* TODO/FIXME - localize */
    RARCH_LOG("[Content] Core requires uncompressed content - "
          "extracting archive to temporary directory...\n");
+
+   /* A disc set (a cue sheet and the tracks it names, say) is only
+    * usable whole: extracting just the first matching member would
+    * hand the core a sheet without its tracks. */
+   if (content_file_archive_find_sheet(*content_path,
+            tmp_path, sizeof(tmp_path)))
+   {
+      char sheet[PATH_MAX_LENGTH];
+
+      strlcpy(sheet, tmp_path, sizeof(sheet));
+      if (!content_file_extract_disc_set(content_ctx, p_content,
+               *content_path, sheet, &tmp_path_ptr))
+      {
+         char msg[PATH_MAX_LENGTH];
+         snprintf(msg, sizeof(msg), "%s: \"%s\".\n",
+               msg_hash_to_str(MSG_FAILED_TO_EXTRACT_CONTENT_FROM_COMPRESSED_FILE),
+               *content_path);
+         *err_string = strdup(msg);
+         return false;
+      }
+
+      *content_path = tmp_path_ptr;
+      RARCH_LOG("[Content] Disc set successfully extracted, loading: \"%s\".\n",
+            tmp_path_ptr);
+      return true;
+   }
 
    /* Attempt to extract file  */
    if (!file_archive_extract_file(

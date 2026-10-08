@@ -56,6 +56,10 @@ struct sevenzip_context_t
    ISzAlloc allocTempImp;
    CSzArEx db;
    size_t temp_size;
+   /* Size of the cached solid block in 'output'. It must survive
+    * between members: SzArEx_Extract reuses the block for the next
+    * member of the same folder and bounds-checks against this. */
+   size_t output_size;
    uint32_t parse_index;
    uint32_t decompress_index;
    uint32_t packIndex;
@@ -323,18 +327,19 @@ static int sevenzip_stream_decompress_data_to_file_iterate(
          (struct sevenzip_context_t*)context;
 
    SRes res                = SZ_ERROR_FAIL;
-   size_t output_size      = 0;
    size_t offset           = 0;
    size_t outSizeProcessed = 0;
 
    res = SzArEx_Extract(&sevenzip_context->db,
          &sevenzip_context->lookStream.vt, sevenzip_context->decompress_index,
          &sevenzip_context->block_index, &sevenzip_context->output,
-         &output_size, &offset, &outSizeProcessed,
+         &sevenzip_context->output_size, &offset, &outSizeProcessed,
          &sevenzip_context->allocImp, &sevenzip_context->allocTempImp);
 
+   /* Extraction is done in one call, so a failure is final; 0 would
+    * have the caller retry the same failing call forever */
    if (res != SZ_OK)
-      return 0;
+      return -1;
 
    if (handle)
       handle->data = sevenzip_context->output + offset;
