@@ -11979,6 +11979,7 @@ static void materialui_list_insert(void *userdata,
             }
             else if (
                      string_is_equal(label, msg_hash_to_str(MENU_ENUM_LABEL_DELETE_ENTRY))
+                  || string_is_equal(label, msg_hash_to_str(MENU_ENUM_LABEL_DH_LIBRARY_DELETE))
                   || string_is_equal(label, msg_hash_to_str(MENU_ENUM_LABEL_DELETE_PLAYLIST))
                   || string_is_equal(label, msg_hash_to_str(MENU_ENUM_LABEL_REMOVE_CURRENT_CONFIG_OVERRIDE_CORE))
                   || string_is_equal(label, msg_hash_to_str(MENU_ENUM_LABEL_REMOVE_CURRENT_CONFIG_OVERRIDE_CONTENT_DIR))
