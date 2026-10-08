@@ -26,7 +26,27 @@ xcodebuild -project RetroArch_iOS13.xcodeproj -scheme "RetroArch iOS Release" \
     -configuration Release -destination generic/platform=iOS \
     -xcconfig iOS/Personal.xcconfig \
     ${TEAM:+DEVELOPMENT_TEAM=$TEAM} ${BUNDLE_ID:+IOS_BUNDLE_IDENTIFIER=$BUNDLE_ID} \
+    CURRENT_PROJECT_VERSION="$(date +%s)" \
     -archivePath build/RetroArchPS1.xcarchive -allowProvisioningUpdates archive
+
+# Bundle the user's own BIOS dumps into the app's assets.zip, which is
+# extracted into Documents/RetroArch, so they land in system/. Only the
+# archived app is touched (export re-signs it); BIOS files are
+# copyrighted and must never be committed to the repository.
+BIOS_DIR="${BIOS_DIR:-$APPLE_DIR/../../../bios}"
+if [ -d "$BIOS_DIR" ] && ls "$BIOS_DIR" | grep -qi '\.bin$' ; then
+    STAGE="$(mktemp -d)"
+    mkdir -p "$STAGE/system"
+    for f in "$BIOS_DIR"/* ; do
+        case "$f" in
+            *.[bB][iI][nN]) cp "$f" "$STAGE/system/$(basename "$f" | tr '[:upper:]' '[:lower:]')" ;;
+        esac
+    done
+    APP_ASSETS="build/RetroArchPS1.xcarchive/Products/Applications/RetroArch.app/assets.zip"
+    (cd "$STAGE" && zip -qr "$APPLE_DIR/$APP_ASSETS" system)
+    echo "Bundled BIOS: $(ls "$STAGE/system" | tr '\n' ' ')"
+    rm -rf "$STAGE"
+fi
 
 TEAM_ID="${TEAM:-$(sed -n 's/^DEVELOPMENT_TEAM = //p' iOS/Personal.xcconfig)}"
 cat > build/ExportOptions.plist <<PLIST
