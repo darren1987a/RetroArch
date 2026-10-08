@@ -1,12 +1,16 @@
 #!/bin/bash
-# Builds a sideloadable RetroArch for iPhone with the PCSX ReARMed (PS1) core.
-# Usage: pkg/apple/iOS/build-ps1.sh   (override TEAM / BUNDLE_ID / CORES_DIR / CORE_TAG via env)
+# Builds a sideloadable RetroArch for iPhone with the PCSX ReARMed (PS1)
+# and PPSSPP (PSP) cores, both pinned to release tags.
+# Usage: pkg/apple/iOS/build-ios.sh
+#   (override TEAM / BUNDLE_ID / CORES_DIR / CORE_TAG / PPSSPP_TAG / BIOS_DIR via env)
 # Then install: xcrun devicectl device install app --device <udid> pkg/apple/build/ipa/RetroArch.ipa
 set -euo pipefail
 
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 CORES_DIR="${CORES_DIR:-$APPLE_DIR/build/cores}"
 CORE_SRC="$CORES_DIR/pcsx_rearmed"
+PPSSPP_SRC="$CORES_DIR/ppsspp"
+JOBS="$(sysctl -n hw.ncpu)"
 
 # Pinned to a release tag of the core, not its development head
 CORE_TAG="${CORE_TAG:-r26l}"
@@ -17,8 +21,24 @@ fi
 make -C "$CORE_SRC" -f Makefile.libretro platform=ios-arm64 clean
 make -C "$CORE_SRC" -f Makefile.libretro platform=ios-arm64 \
     IOSSDK="$(xcrun --sdk iphoneos --show-sdk-path)" \
-    MINVERSION=-miphoneos-version-min=16.0 -j"$(sysctl -n hw.ncpu)"
+    MINVERSION=-miphoneos-version-min=16.0 -j"$JOBS"
 cp "$CORE_SRC/pcsx_rearmed_libretro_ios.dylib" "$APPLE_DIR/iOS/modules/"
+
+# PSP: same recipe as libretro's own iOS CI for this core
+PPSSPP_TAG="${PPSSPP_TAG:-v1.20.4}"
+if [ ! -d "$PPSSPP_SRC" ] ; then
+    git clone --depth=1 --branch "$PPSSPP_TAG" --recurse-submodules --shallow-submodules \
+        https://github.com/hrydgard/ppsspp.git "$PPSSPP_SRC"
+fi
+cmake -S "$PPSSPP_SRC" -B "$PPSSPP_SRC/build/ios-arm64" \
+    -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+    -DCMAKE_C_FLAGS=-DIOS -DCMAKE_CXX_FLAGS=-DIOS -DIOS=ON \
+    -DCMAKE_OSX_DEPLOYMENT_TARGET=16.0 -DCMAKE_SYSTEM_NAME=iOS \
+    -DCMAKE_SYSTEM_PROCESSOR=arm64 -DCMAKE_OSX_ARCHITECTURES=arm64 \
+    -DCMAKE_TOOLCHAIN_FILE=cmake/Toolchains/ios.cmake -DLIBRETRO=ON
+cmake --build "$PPSSPP_SRC/build/ios-arm64" --target ppsspp_libretro -- -j"$JOBS"
+cp "$(find "$PPSSPP_SRC/build/ios-arm64" -maxdepth 3 -name ppsspp_libretro.dylib | head -1)" \
+    "$APPLE_DIR/iOS/modules/ppsspp_libretro_ios.dylib"
 
 cd "$APPLE_DIR"
 rm -rf build/RetroArchPS1.xcarchive build/ipa
@@ -29,24 +49,26 @@ xcodebuild -project RetroArch_iOS13.xcodeproj -scheme "RetroArch iOS Release" \
     CURRENT_PROJECT_VERSION="$(date +%s)" \
     -archivePath build/RetroArchPS1.xcarchive -allowProvisioningUpdates archive
 
-# Bundle the user's own BIOS dumps into the app's assets.zip, which is
-# extracted into Documents/RetroArch, so they land in system/. Only the
-# archived app is touched (export re-signs it); BIOS files are
-# copyrighted and must never be committed to the repository.
+# Add to the app's assets.zip, which is extracted into Documents/RetroArch,
+# so system/ lands in the frontend's system directory:
+#  - the user's own BIOS dumps (copyrighted: never commit them)
+#  - PPSSPP's data files (fonts, flash0, compat.ini), read from system/PPSSPP
+# Only the archived app is touched; export re-signs it.
 BIOS_DIR="${BIOS_DIR:-$APPLE_DIR/../../../bios}"
-if [ -d "$BIOS_DIR" ] && ls "$BIOS_DIR" | grep -qi '\.bin$' ; then
-    STAGE="$(mktemp -d)"
-    mkdir -p "$STAGE/system"
+STAGE="$(mktemp -d)"
+mkdir -p "$STAGE/system"
+if [ -d "$BIOS_DIR" ] ; then
     for f in "$BIOS_DIR"/* ; do
         case "$f" in
             *.[bB][iI][nN]) cp "$f" "$STAGE/system/$(basename "$f" | tr '[:upper:]' '[:lower:]')" ;;
         esac
     done
-    APP_ASSETS="build/RetroArchPS1.xcarchive/Products/Applications/RetroArch.app/assets.zip"
-    (cd "$STAGE" && zip -qr "$APPLE_DIR/$APP_ASSETS" system)
-    echo "Bundled BIOS: $(ls "$STAGE/system" | tr '\n' ' ')"
-    rm -rf "$STAGE"
 fi
+echo "Bundled BIOS: $(ls "$STAGE/system" | tr '\n' ' ')"
+cp -R "$PPSSPP_SRC/assets" "$STAGE/system/PPSSPP"
+APP_ASSETS="build/RetroArchPS1.xcarchive/Products/Applications/RetroArch.app/assets.zip"
+(cd "$STAGE" && zip -qr "$APPLE_DIR/$APP_ASSETS" system)
+rm -rf "$STAGE"
 
 TEAM_ID="${TEAM:-$(sed -n 's/^DEVELOPMENT_TEAM = //p' iOS/Personal.xcconfig)}"
 cat > build/ExportOptions.plist <<PLIST
