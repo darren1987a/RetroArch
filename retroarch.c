@@ -8713,6 +8713,10 @@ enum retro_language retroarch_get_language_from_iso(const char *iso639)
       {"pt", RETRO_LANGUAGE_PORTUGUESE_PORTUGAL},
       {"ru", RETRO_LANGUAGE_RUSSIAN},
       {"ko", RETRO_LANGUAGE_KOREAN},
+      /* Script designators, as Apple platforms report them
+       * ("zh-Hant-TW", "zh-Hans-CN"); must precede plain "zh". */
+      {"zh_Hant", RETRO_LANGUAGE_CHINESE_TRADITIONAL},
+      {"zh_Hans", RETRO_LANGUAGE_CHINESE_SIMPLIFIED},
       {"zh_CN", RETRO_LANGUAGE_CHINESE_SIMPLIFIED},
       {"zh_SG", RETRO_LANGUAGE_CHINESE_SIMPLIFIED},
       {"zh_HK", RETRO_LANGUAGE_CHINESE_TRADITIONAL},
