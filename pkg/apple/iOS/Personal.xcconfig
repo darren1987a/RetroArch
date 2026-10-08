@@ -7,4 +7,4 @@ IOS_BUNDLE_IDENTIFIER = com.darrenhuang.RetroArchPS1
 RA_IPHONEOS_DEPLOYMENT_TARGET = 16.0
 IPHONEOS_DEPLOYMENT_TARGET = 16.0
 // Bump on each build that changes assets.zip so it is re-extracted on update
-CURRENT_PROJECT_VERSION = 2
+CURRENT_PROJECT_VERSION = 3
