@@ -16962,3 +16962,137 @@ MSG_HASH(
    "Show the 'Game AI' option."
    )
 #endif
+
+/* DHGameCenter: DH Game Library */
+MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_DH_LIBRARY,
+   "DH Game Library"
+   )
+MSG_HASH(
+   MENU_ENUM_SUBLABEL_DH_LIBRARY,
+   "Browse games shared from DH FileBrowser, download them and add them to playlists."
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_DH_LIBRARY_URL,
+   "DH Game Library Share URL"
+   )
+MSG_HASH(
+   MENU_ENUM_SUBLABEL_DH_LIBRARY_URL,
+   "FileBrowser share link, e.g. http://192.168.1.10:9520/public/share/<hash>"
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_DH_LIBRARY_DOWNLOAD,
+   "Download and Add to Playlist"
+   )
+MSG_HASH(
+   MENU_ENUM_SUBLABEL_DH_LIBRARY_DOWNLOAD,
+   "Download this game in the background and add it to the playlist of its system."
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_DH_LIBRARY_RETRY,
+   "Retry"
+   )
+MSG_HASH(
+   MENU_ENUM_SUBLABEL_DH_LIBRARY_RETRY,
+   "Load this folder from the server again."
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_LOADING,
+   "Loading..."
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_URL_NOT_SET,
+   "Share URL is not set. Enter the FileBrowser share link above."
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_URL_INVALID,
+   "Invalid share URL. Expected: http://<host>:<port>/public/share/<hash>"
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_CONNECT_FAILED,
+   "Cannot connect to the server. Check the share URL and the Wi-Fi connection."
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_SHARE_NOT_FOUND,
+   "Share not found: the hash is invalid or the share was deleted."
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_FOLDER_NOT_FOUND,
+   "Folder not found on the server. It may have been moved or deleted."
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_ACCESS_DENIED,
+   "Access denied: the share may be password protected, private or out of downloads."
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_HTTP_ERROR,
+   "Server error, HTTP status "
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_INVALID_RESPONSE,
+   "Unexpected response from the server."
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_EMPTY,
+   "This folder is empty."
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_NO_SYSTEMS,
+   "No supported system folders (PSGame, PSPGame) in this share."
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_DOWNLOADED,
+   "Downloaded"
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_READD,
+   "Already Downloaded (Add to Playlist Again)"
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_ALREADY_DOWNLOADED,
+   "Already downloaded: "
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_DOWNLOAD_IN_PROGRESS,
+   "Already downloading: "
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_DOWNLOAD_FAILED,
+   "Download failed: "
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_NOT_ENOUGH_SPACE,
+   "Not enough storage space: "
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_WRITE_FAILED,
+   "Could not save the file (storage full?): "
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_ADDED_TO_PLAYLIST,
+   "Added to playlist: "
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_CORE_NOT_FOUND,
+   "Core not installed, playlist default core not set: "
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_NO_DOWNLOAD_DIR,
+   "Download directory is not set (Settings > Directory > Downloads)."
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_INVALID_PATH,
+   "Invalid file name: "
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_FILE_SIZE,
+   "Size: "
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_PLAYLIST,
+   "Playlist: "
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_SAVE_PATH,
+   "Save to: "
+   )

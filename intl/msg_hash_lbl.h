@@ -6720,3 +6720,41 @@ MSG_HASH(
    "game_ai_show_debug"
    )
 #endif
+
+/* DHGameCenter: DH Game Library */
+MSG_HASH(
+   MENU_ENUM_LABEL_DH_LIBRARY,
+   "dh_library"
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_DH_LIBRARY_URL,
+   "dh_library_url"
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_DH_LIBRARY_DOWNLOAD,
+   "dh_library_download"
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_DH_LIBRARY_RETRY,
+   "dh_library_retry"
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_DEFERRED_DH_LIBRARY_LIST,
+   "deferred_dh_library_list"
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_DEFERRED_DH_LIBRARY_FILE,
+   "deferred_dh_library_file"
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_DH_LIBRARY_DIR,
+   "dh_library_dir"
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_DH_LIBRARY_FILE,
+   "dh_library_file"
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_DH_LIBRARY_INFO,
+   "dh_library_info"
+   )

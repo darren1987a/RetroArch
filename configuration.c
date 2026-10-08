@@ -1637,6 +1637,9 @@ static struct config_path_setting *populate_settings_path(
    SETTING_PATH("bundle_assets_dst_path_subdir", settings->paths.bundle_assets_dst_subdir, false, NULL, true);
    SETTING_PATH("core_updater_buildbot_cores_url",  settings->paths.network_buildbot_url, false, NULL, true);
    SETTING_PATH("core_updater_buildbot_assets_url", settings->paths.network_buildbot_assets_url, false, NULL, true);
+#ifdef HAVE_NETWORKING
+   SETTING_PATH("dh_library_url",                settings->paths.dh_library_url, false, NULL, true);
+#endif
    SETTING_PATH("libretro_directory",            settings->paths.directory_libretro, false, NULL, false);
    SETTING_PATH("core_options_path",             settings->paths.path_core_options, false, NULL, true);
    SETTING_PATH("libretro_info_path",            settings->paths.path_libretro_info, false, NULL, true);

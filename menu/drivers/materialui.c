@@ -41,6 +41,7 @@
 #include "../../ui/ui_companion_driver.h"
 
 #include "../menu_driver.h"
+#include "../dh_library_menu.h"
 #include "../menu_screensaver.h"
 
 #include "../../gfx/gfx_animation.h"
@@ -10762,6 +10763,8 @@ static int materialui_list_push(void *data, void *userdata,
 #endif
 
 #if defined(HAVE_NETWORKING)
+            /* DHGameCenter: DH Game Library */
+            dh_library_menu_append_main_entry(info->list);
 #ifdef HAVE_LAKKA
             MENU_DISPLAYLIST_PARSE_SETTINGS_ENUM(
                   info->list,
@@ -12007,6 +12010,7 @@ static void materialui_list_insert(void *userdata,
             }
             else if (
                      string_is_equal(label, msg_hash_to_str(MENU_ENUM_LABEL_ONLINE_UPDATER))
+                  || string_is_equal(label, msg_hash_to_str(MENU_ENUM_LABEL_DH_LIBRARY))
                   || string_is_equal(label, msg_hash_to_str(MENU_ENUM_LABEL_UPDATE_CORE_INFO_FILES))
                   || string_is_equal(label, msg_hash_to_str(MENU_ENUM_LABEL_UPDATE_INSTALLED_CORES))
                   || string_is_equal(label, msg_hash_to_str(MENU_ENUM_LABEL_UPDATE_AUTOCONFIG_PROFILES))

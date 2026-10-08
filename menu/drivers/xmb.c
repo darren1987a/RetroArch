@@ -43,6 +43,7 @@
 #include "../../frontend/frontend_driver.h"
 
 #include "../menu_driver.h"
+#include "../dh_library_menu.h"
 #include "../menu_entries.h"
 #include "../menu_screensaver.h"
 
@@ -3519,6 +3520,7 @@ static uintptr_t xmb_icon_get_id(xmb_handle_t *xmb,
          return xmb->textures.list[XMB_TEXTURE_FILE];
       case MENU_ENUM_LABEL_ONLINE_UPDATER:
       case MENU_ENUM_LABEL_UPDATER_SETTINGS:
+      case MENU_ENUM_LABEL_DH_LIBRARY:
          return xmb->textures.list[XMB_TEXTURE_UPDATER];
       case MENU_ENUM_LABEL_UPDATE_LAKKA:
          return xmb->textures.list[XMB_TEXTURE_MAIN_MENU];
@@ -9737,6 +9739,8 @@ static int xmb_list_push(void *data, void *userdata,
             }
 #endif
 #if defined(HAVE_NETWORKING)
+            /* DHGameCenter: DH Game Library */
+            dh_library_menu_append_main_entry(info->list);
 #if defined(HAVE_ONLINE_UPDATER)
             if (menu_show_online_updater && !kiosk_mode_enable)
             {

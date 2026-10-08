@@ -85,6 +85,7 @@
 #include "menu_cbs.h"
 #include "menu_driver.h"
 #include "menu_entries.h"
+#include "dh_library_menu.h"
 #if defined(HAVE_CG) || defined(HAVE_GLSL) || defined(HAVE_SLANG) || defined(HAVE_HLSL)
 #include "menu_shader.h"
 #endif
@@ -11335,6 +11336,7 @@ unsigned menu_displaylist_build_list(
                {MENU_ENUM_LABEL_CORE_UPDATER_SHOW_EXPERIMENTAL_CORES,  PARSE_ONLY_BOOL},
                {MENU_ENUM_LABEL_CORE_UPDATER_AUTO_BACKUP,              PARSE_ONLY_BOOL},
                {MENU_ENUM_LABEL_CORE_UPDATER_AUTO_BACKUP_HISTORY_SIZE, PARSE_ONLY_UINT},
+               {MENU_ENUM_LABEL_DH_LIBRARY_URL,                        PARSE_ONLY_STRING},
             };
 
             for (i = 0; i < ARRAY_SIZE(build_list); i++)
@@ -15274,6 +15276,10 @@ bool menu_displaylist_ctl(enum menu_displaylist_ctl_state type,
                            MENU_ENUM_LABEL_NETPLAY,
                            PARSE_ACTION, false) == 0)
                      count++;
+
+               /* DHGameCenter: DH Game Library */
+               if (dh_library_menu_append_main_entry(info->list))
+                  count++;
 
 #ifdef HAVE_ONLINE_UPDATER
                if (      settings->bools.menu_show_online_updater

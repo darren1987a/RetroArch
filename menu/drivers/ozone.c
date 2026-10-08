@@ -36,6 +36,7 @@
 
 #include "../menu_cbs.h"
 #include "../menu_driver.h"
+#include "../dh_library_menu.h"
 #include "../menu_screensaver.h"
 
 #include "../../gfx/gfx_animation.h"
@@ -1983,6 +1984,7 @@ static uintptr_t ozone_entries_icon_get_texture(
             return ozone->icons_textures[OZONE_ENTRIES_ICONS_TEXTURE_FILE];
       case MENU_ENUM_LABEL_ONLINE_UPDATER:
       case MENU_ENUM_LABEL_UPDATER_SETTINGS:
+      case MENU_ENUM_LABEL_DH_LIBRARY:
             return ozone->icons_textures[OZONE_ENTRIES_ICONS_TEXTURE_UPDATER];
       case MENU_ENUM_LABEL_UPDATE_LAKKA:
             return ozone->icons_textures[OZONE_ENTRIES_ICONS_TEXTURE_MAIN_MENU];
@@ -10077,6 +10079,8 @@ static int ozone_list_push(void *data, void *userdata,
             }
 #endif
 #if defined(HAVE_NETWORKING)
+            /* DHGameCenter: DH Game Library */
+            dh_library_menu_append_main_entry(info->list);
 #if defined(HAVE_ONLINE_UPDATER)
             if (      settings->bools.menu_show_online_updater
                   && !settings->bools.kiosk_mode_enable)

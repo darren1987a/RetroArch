@@ -15086,3 +15086,137 @@ MSG_HASH(
 
 
 #endif
+
+/* DHGameCenter: DH Game Library */
+MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_DH_LIBRARY,
+   "DH 遊戲庫"
+   )
+MSG_HASH(
+   MENU_ENUM_SUBLABEL_DH_LIBRARY,
+   "瀏覽 DH FileBrowser 分享的遊戲，下載後自動加入播放清單。"
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_DH_LIBRARY_URL,
+   "DH 遊戲庫分享網址"
+   )
+MSG_HASH(
+   MENU_ENUM_SUBLABEL_DH_LIBRARY_URL,
+   "FileBrowser 分享連結，例如 http://192.168.1.10:9520/public/share/<hash>"
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_DH_LIBRARY_DOWNLOAD,
+   "下載並加入播放清單"
+   )
+MSG_HASH(
+   MENU_ENUM_SUBLABEL_DH_LIBRARY_DOWNLOAD,
+   "在背景下載這個遊戲，並加入對應主機的播放清單。"
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_DH_LIBRARY_RETRY,
+   "重試"
+   )
+MSG_HASH(
+   MENU_ENUM_SUBLABEL_DH_LIBRARY_RETRY,
+   "重新從伺服器載入這個資料夾。"
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_LOADING,
+   "載入中…"
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_URL_NOT_SET,
+   "尚未設定分享網址，請在上方輸入 FileBrowser 分享連結。"
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_URL_INVALID,
+   "分享網址格式不正確，應為：http://<主機>:<port>/public/share/<hash>"
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_CONNECT_FAILED,
+   "無法連線到伺服器，請確認分享網址和 Wi-Fi 連線。"
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_SHARE_NOT_FOUND,
+   "找不到分享：hash 無效，或分享已被刪除。"
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_FOLDER_NOT_FOUND,
+   "伺服器上找不到這個資料夾，可能已被移動或刪除。"
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_ACCESS_DENIED,
+   "沒有存取權限：分享可能設了密碼、不公開，或已達下載次數上限。"
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_HTTP_ERROR,
+   "伺服器錯誤，HTTP 狀態碼 "
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_INVALID_RESPONSE,
+   "伺服器回應的格式不正確。"
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_EMPTY,
+   "這個資料夾是空的。"
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_NO_SYSTEMS,
+   "分享裡沒有支援的主機資料夾（PSGame、PSPGame）。"
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_DOWNLOADED,
+   "已下載"
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_READD,
+   "已下載（重新加入播放清單）"
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_ALREADY_DOWNLOADED,
+   "已下載："
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_DOWNLOAD_IN_PROGRESS,
+   "正在下載中："
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_DOWNLOAD_FAILED,
+   "下載失敗："
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_NOT_ENOUGH_SPACE,
+   "儲存空間不足："
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_WRITE_FAILED,
+   "無法儲存檔案（空間不足？）："
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_ADDED_TO_PLAYLIST,
+   "已加入播放清單："
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_CORE_NOT_FOUND,
+   "找不到核心，播放清單沒有設定預設核心："
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_NO_DOWNLOAD_DIR,
+   "尚未設定下載資料夾（設定 > 資料夾 > 下載資料夾）。"
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_INVALID_PATH,
+   "檔名不合法："
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_FILE_SIZE,
+   "檔案大小："
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_PLAYLIST,
+   "播放清單："
+   )
+MSG_HASH(
+   MSG_DH_LIBRARY_SAVE_PATH,
+   "存放位置："
+   )

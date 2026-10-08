@@ -8961,6 +8961,16 @@ static void general_write_handler(rarch_setting_t *setting)
          }
          break;
 #endif
+#ifdef HAVE_NETWORKING
+      case MENU_ENUM_LABEL_DH_LIBRARY_URL:
+         {
+            /* DHGameCenter: reload the DH Game Library
+             * from the new share */
+            struct menu_state *menu_st = menu_state_get_ptr();
+            menu_st->flags            |= MENU_ST_FLAG_ENTRIES_NEED_REFRESH;
+         }
+         break;
+#endif
       case MENU_ENUM_LABEL_CONTENT_SHOW_SETTINGS:
       case MENU_ENUM_LABEL_CONTENT_SHOW_FAVORITES:
       case MENU_ENUM_LABEL_CONTENT_SHOW_FAVORITES_FIRST:
@@ -22796,6 +22806,23 @@ static bool setting_append_list(
                general_read_handler,
                SD_FLAG_NONE
                );
+
+         /* DHGameCenter: DH Game Library share URL */
+         CONFIG_STRING(
+               list, list_info,
+               settings->paths.dh_library_url,
+               sizeof(settings->paths.dh_library_url),
+               MENU_ENUM_LABEL_DH_LIBRARY_URL,
+               MENU_ENUM_LABEL_VALUE_DH_LIBRARY_URL,
+               "",
+               &group_info,
+               &subgroup_info,
+               parent_group,
+               general_write_handler,
+               general_read_handler);
+         SETTINGS_DATA_LIST_CURRENT_ADD_FLAGS(list, list_info, SD_FLAG_ALLOW_INPUT);
+         (*list)[list_info->index - 1].ui_type       = ST_UI_TYPE_STRING_LINE_EDIT;
+         (*list)[list_info->index - 1].action_start  = setting_generic_action_start_default;
 
 #ifdef HAVE_UPDATE_CORES
          CONFIG_BOOL(

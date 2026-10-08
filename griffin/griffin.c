@@ -1277,6 +1277,8 @@ NETPLAY
 #endif
 #include "../tasks/task_netplay_find_content.c"
 #include "../tasks/task_pl_thumbnail_download.c"
+/* DHGameCenter: DH Game Library */
+#include "../network/dh_library.c"
 #endif
 
 /*============================================================
@@ -1379,6 +1381,10 @@ MENU
 #include "../menu/cbs/menu_cbs_sublabel.c"
 #include "../menu/menu_displaylist.c"
 #include "../menu/menu_contentless_cores.c"
+#ifdef HAVE_NETWORKING
+/* DHGameCenter: DH Game Library */
+#include "../menu/dh_library_menu.c"
+#endif
 #ifdef HAVE_LIBRETRODB
 #include "../menu/menu_explore.c"
 #include "../tasks/task_menu_explore.c"

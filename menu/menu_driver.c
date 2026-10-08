@@ -45,6 +45,7 @@
 #include "../audio/audio_driver.h"
 
 #include "menu_driver.h"
+#include "dh_library_menu.h"
 #include "menu_cbs.h"
 #include "../driver.h"
 #include "../list_special.h"
@@ -2581,6 +2582,11 @@ static void menu_cbs_init(
 
    if (menu_driver_ctx && menu_driver_ctx->bind_init)
       menu_driver_ctx->bind_init(cbs, path, label, type, idx);
+
+#ifdef HAVE_NETWORKING
+   /* DHGameCenter: callbacks of 'DH Game Library' entries */
+   dh_library_menu_cbs_init(cbs, path, label, type);
+#endif
 }
 
 #if defined(HAVE_CG) || defined(HAVE_GLSL) || defined(HAVE_SLANG) || defined(HAVE_HLSL)

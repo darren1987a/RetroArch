@@ -2361,6 +2361,12 @@ ifeq ($(HAVE_NETWORKING), 1)
 	  network/netplay/netplay_frontend.o \
 	  network/netplay/netplay_room_parse.o
 
+   # DHGameCenter: DH Game Library
+   OBJ += network/dh_library.o
+   ifeq ($(HAVE_MENU_COMMON), 1)
+      OBJ += menu/dh_library_menu.o
+   endif
+
    # RetroAchievements
    ifeq ($(HAVE_CHEEVOS), 1)
       DEFINES += -DHAVE_CHEEVOS -DRC_CLIENT_SUPPORTS_HASH

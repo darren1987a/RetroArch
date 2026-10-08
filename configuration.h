@@ -558,6 +558,7 @@ typedef struct settings
       char netplay_custom_mitm_server[NAME_MAX_LENGTH];
       char network_buildbot_url[NAME_MAX_LENGTH];
       char network_buildbot_assets_url[NAME_MAX_LENGTH];
+      char dh_library_url[NAME_MAX_LENGTH]; /* DHGameCenter: DH Game Library share URL */
       char menu_content_show_settings_password[NAME_MAX_LENGTH];
       char kiosk_mode_password[NAME_MAX_LENGTH];
 
