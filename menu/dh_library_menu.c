@@ -1334,7 +1334,6 @@ void dh_library_menu_cbs_init(menu_file_list_cbs_t *cbs,
          cbs->action_ok        = dh_menu_action_ok_dir;
          cbs->action_get_value = dh_menu_get_value_entry;
          cbs->action_sublabel  = dh_menu_sublabel_entry;
-         cbs->action_select    = NULL;
          cbs->action_start     = NULL;
          cbs->action_scan      = NULL;
          break;
@@ -1342,7 +1341,6 @@ void dh_library_menu_cbs_init(menu_file_list_cbs_t *cbs,
          cbs->action_ok        = dh_menu_action_ok_file;
          cbs->action_get_value = dh_menu_get_value_entry;
          cbs->action_sublabel  = dh_menu_sublabel_entry;
-         cbs->action_select    = NULL;
          cbs->action_start     = NULL;
          cbs->action_scan      = NULL;
          break;
