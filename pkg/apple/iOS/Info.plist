@@ -96,6 +96,11 @@
 	<string>RetroArch uses direct Bluetooth communication for some types of controllers</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
 	<string>RetroArch uses direct Bluetooth communication for some types of controllers</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_altserver._tcp</string>
@@ -104,7 +109,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Some cores are able to provide camera input to games.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>RetroArch uses the local network to find local Netplay participants.</string>
+	<string>RetroArch uses the local network to find local Netplay participants and to download games from the DH Game Library.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Some cores can use location.</string>
 	<key>NSMicrophoneUsageDescription</key>
