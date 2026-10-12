@@ -1318,7 +1318,11 @@ MSG_HASH(
    )
 MSG_HASH(
    MENU_ENUM_LABEL_VALUE_CLOUD_SYNC_SYNC_SAVES,
-   "Sync: Saves/States"
+   "Sync: Saves"
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_CLOUD_SYNC_SYNC_STATES,
+   "Sync: Save States"
    )
 MSG_HASH(
    MENU_ENUM_LABEL_VALUE_CLOUD_SYNC_SYNC_CONFIGS,
@@ -1334,7 +1338,11 @@ MSG_HASH(
    )
 MSG_HASH(
    MENU_ENUM_SUBLABEL_CLOUD_SYNC_SYNC_SAVES,
-   "When enabled, saves/states will be synced to cloud."
+   "When enabled, saves (memory cards / SRAM) will be synced to cloud."
+   )
+MSG_HASH(
+   MENU_ENUM_SUBLABEL_CLOUD_SYNC_SYNC_STATES,
+   "When enabled, save states will be synced to cloud."
    )
 MSG_HASH(
    MENU_ENUM_SUBLABEL_CLOUD_SYNC_SYNC_CONFIGS,

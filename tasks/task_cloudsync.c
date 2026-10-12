@@ -255,9 +255,45 @@ static void task_cloud_sync_read_local_manifest(task_cloud_sync_state_t *sync_st
    sync_state->phase = CLOUD_SYNC_PHASE_BUILD_CURRENT_MANIFEST;
 }
 
+/* PPSSPP uses the saves directory as its memory stick, so next to the
+ * actual save data (PSP/SAVEDATA) it also writes settings, caches, its own
+ * save states, etc. Only PSP/SAVEDATA is worth syncing.
+ * Returns true if the manifest path has a "PSP" directory component that is
+ * not followed by "SAVEDATA", e.g. "saves/PPSSPP/PSP/SYSTEM/ppsspp.ini". */
+static bool task_cloud_sync_is_psp_non_save_file(const char *filename)
+{
+   const char *p;
+
+   if (!string_starts_with(filename, "saves/"))
+      return false;
+
+   for (p = filename; (p = strchr(p, '/')); )
+   {
+      const char *next = ++p;
+      const char *end  = strchr(next, '/');
+      /* the last component is the file name, not a directory */
+      if (!end)
+         return false;
+      if ((end - next) == 3 && string_starts_with_case_insensitive(next, "PSP"))
+      {
+         const char *sub = end + 1;
+         const char *sub_end = strchr(sub, '/');
+         if (!sub_end) /* a file directly inside PSP/ */
+            return true;
+         return !(
+               (sub_end - sub) == 8
+            && string_starts_with_case_insensitive(sub, "SAVEDATA"));
+      }
+   }
+   return false;
+}
+
 /* takes the filename in manifest format, e.g. "config/retroarch.cfg" */
 static bool task_cloud_sync_should_ignore_file(const char *filename)
 {
+   if (task_cloud_sync_is_psp_non_save_file(filename))
+      return true;
+
    if (string_starts_with(filename, "config/"))
    {
       const char *path = filename + STRLEN_CONST("config/");
@@ -361,7 +397,10 @@ static struct string_list *task_cloud_sync_directory_map(void)
       {
          string_list_append(list, "saves", attr);
          list->elems[list->size - 1].userdata = strdup(dir_get_ptr(RARCH_DIR_SAVEFILE));
+      }
 
+      if (settings->bools.cloud_sync_sync_states)
+      {
          string_list_append(list, "states", attr);
          list->elems[list->size - 1].userdata = strdup(dir_get_ptr(RARCH_DIR_SAVESTATE));
       }

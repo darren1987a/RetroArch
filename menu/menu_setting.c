@@ -11795,6 +11795,21 @@ static bool setting_append_list(
 
          CONFIG_BOOL(
                list, list_info,
+               &settings->bools.cloud_sync_sync_states,
+               MENU_ENUM_LABEL_CLOUD_SYNC_SYNC_STATES,
+               MENU_ENUM_LABEL_VALUE_CLOUD_SYNC_SYNC_STATES,
+               false,
+               MENU_ENUM_LABEL_VALUE_OFF,
+               MENU_ENUM_LABEL_VALUE_ON,
+               &group_info,
+               &subgroup_info,
+               parent_group,
+               general_write_handler,
+               general_read_handler,
+               SD_FLAG_NONE);
+
+         CONFIG_BOOL(
+               list, list_info,
                &settings->bools.cloud_sync_sync_configs,
                MENU_ENUM_LABEL_CLOUD_SYNC_SYNC_CONFIGS,
                MENU_ENUM_LABEL_VALUE_CLOUD_SYNC_SYNC_CONFIGS,
