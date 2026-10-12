@@ -3711,6 +3711,10 @@ MSG_HASH(
    "cloud_sync_sync_saves"
    )
 MSG_HASH(
+   MENU_ENUM_LABEL_CLOUD_SYNC_SYNC_STATES,
+   "cloud_sync_sync_states"
+   )
+MSG_HASH(
    MENU_ENUM_LABEL_CLOUD_SYNC_SYNC_CONFIGS,
    "cloud_sync_sync_configs"
    )
