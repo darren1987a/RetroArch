@@ -9280,6 +9280,14 @@ MSG_HASH(
    "Capture an image of the screen."
    )
 MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_ROTATE_SCREEN,
+   "Rotate Screen"
+   )
+MSG_HASH(
+   MENU_ENUM_SUBLABEL_ROTATE_SCREEN,
+   "Force the screen orientation, cycling through Normal, Vertical, Flipped and Flipped Rotated."
+   )
+MSG_HASH(
    MENU_ENUM_LABEL_VALUE_STATE_SLOT,
    "State Slot"
    )

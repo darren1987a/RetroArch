@@ -5786,6 +5786,19 @@ STATIC_DEFAULT_ACTION_OK_CMD_FUNC(action_ok_save_main_config,         CMD_EVENT_
 STATIC_DEFAULT_ACTION_OK_CMD_FUNC(action_ok_resume_content,           CMD_EVENT_RESUME)
 STATIC_DEFAULT_ACTION_OK_CMD_FUNC(action_ok_restart_content,          CMD_EVENT_RESET)
 STATIC_DEFAULT_ACTION_OK_CMD_FUNC(action_ok_screenshot,               CMD_EVENT_TAKE_SCREENSHOT)
+
+/* Cycles the forced screen orientation (Settings > Video > Screen Orientation)
+ * from the Quick Menu, and persists it in the same setting */
+static int action_ok_rotate_screen(const char *path,
+      const char *label, unsigned type, size_t idx, size_t entry_idx)
+{
+   settings_t *settings = config_get_ptr();
+   unsigned next        = (settings->uints.screen_orientation + 1) % 4;
+
+   configuration_set_uint(settings, settings->uints.screen_orientation, next);
+   video_display_server_set_screen_orientation((enum rotation)next);
+   return 0;
+}
 #if defined(HAVE_CG) || defined(HAVE_GLSL) || defined(HAVE_SLANG) || defined(HAVE_HLSL)
 STATIC_DEFAULT_ACTION_OK_CMD_FUNC(action_ok_shader_apply_changes,     CMD_EVENT_SHADERS_APPLY_CHANGES)
 #endif
@@ -9137,6 +9150,7 @@ static int menu_cbs_init_bind_ok_compare_label(menu_file_list_cbs_t *cbs,
          {MENU_ENUM_LABEL_ADD_TO_PLAYLIST_QUICKMENU,           action_ok_push_add_to_playlist_quickmenu},
          {MENU_ENUM_LABEL_RESTART_CONTENT,                     action_ok_restart_content},
          {MENU_ENUM_LABEL_TAKE_SCREENSHOT,                     action_ok_screenshot},
+         {MENU_ENUM_LABEL_ROTATE_SCREEN,                       action_ok_rotate_screen},
          {MENU_ENUM_LABEL_RENAME_ENTRY,                        action_ok_rename_entry},
          {MENU_ENUM_LABEL_DELETE_ENTRY,                        action_ok_delete_entry},
          {MENU_ENUM_LABEL_MENU_DISABLE_KIOSK_MODE,             action_ok_disable_kiosk_mode},
