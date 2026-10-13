@@ -1040,7 +1040,6 @@ DEFAULT_SUBLABEL_MACRO(action_bind_sublabel_core_enable,                        
 DEFAULT_SUBLABEL_MACRO(action_bind_sublabel_database_manager,                      MENU_ENUM_SUBLABEL_DATABASE_MANAGER)
 DEFAULT_SUBLABEL_MACRO(action_bind_sublabel_cursor_manager,                        MENU_ENUM_SUBLABEL_CURSOR_MANAGER)
 DEFAULT_SUBLABEL_MACRO(action_bind_sublabel_take_screenshot,                       MENU_ENUM_SUBLABEL_TAKE_SCREENSHOT)
-DEFAULT_SUBLABEL_MACRO(action_bind_sublabel_rotate_screen,                         MENU_ENUM_SUBLABEL_ROTATE_SCREEN)
 DEFAULT_SUBLABEL_MACRO(action_bind_sublabel_resume_content,                        MENU_ENUM_SUBLABEL_RESUME_CONTENT)
 DEFAULT_SUBLABEL_MACRO(action_bind_sublabel_close_content,                         MENU_ENUM_SUBLABEL_CLOSE_CONTENT)
 DEFAULT_SUBLABEL_MACRO(action_bind_sublabel_savestate_list,                        MENU_ENUM_SUBLABEL_SAVESTATE_LIST)
@@ -3611,9 +3610,6 @@ int menu_cbs_init_bind_sublabel(menu_file_list_cbs_t *cbs,
             break;
          case MENU_ENUM_LABEL_TAKE_SCREENSHOT:
             BIND_ACTION_SUBLABEL(cbs, action_bind_sublabel_take_screenshot);
-            break;
-         case MENU_ENUM_LABEL_ROTATE_SCREEN:
-            BIND_ACTION_SUBLABEL(cbs, action_bind_sublabel_rotate_screen);
             break;
          case MENU_ENUM_LABEL_CURSOR_MANAGER:
          case MENU_ENUM_LABEL_CURSOR_MANAGER_LIST:

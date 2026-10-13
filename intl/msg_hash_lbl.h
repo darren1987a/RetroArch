@@ -3948,10 +3948,6 @@ MSG_HASH(
    "take_screenshot"
    )
 MSG_HASH(
-   MENU_ENUM_LABEL_ROTATE_SCREEN,
-   "rotate_screen"
-   )
-MSG_HASH(
    MENU_ENUM_LABEL_THREADED_DATA_RUNLOOP_ENABLE,
    "threaded_data_runloop_enable"
    )

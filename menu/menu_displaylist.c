@@ -3785,14 +3785,6 @@ static int menu_displaylist_parse_load_content_settings(
                MENU_SETTING_ACTION_CORE_DISK_OPTIONS, 0, 0, NULL))
             count++;
 
-      if (video_display_server_can_set_screen_orientation())
-         if (menu_entries_append(list,
-               msg_hash_to_str(MENU_ENUM_LABEL_VALUE_ROTATE_SCREEN),
-               msg_hash_to_str(MENU_ENUM_LABEL_ROTATE_SCREEN),
-               MENU_ENUM_LABEL_ROTATE_SCREEN,
-               MENU_SETTING_ACTION, 0, 0, NULL))
-            count++;
-
 #ifdef HAVE_SCREENSHOTS
       if (settings->bools.quick_menu_show_take_screenshot)
       {
