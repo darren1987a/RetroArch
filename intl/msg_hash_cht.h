@@ -13335,6 +13335,10 @@ MSG_HASH(
    "無法從壓縮檔中提取檔案"
    )
 MSG_HASH(
+   MSG_CLOUD_SYNC_CONFLICT_BACKUP,
+   "雲端同步發現衝突的修改。沒有覆蓋任何檔案，兩邊的版本都已備份在：%s"
+   )
+MSG_HASH(
    MSG_FAILED_TO_GET_NICKNAME_FROM_CLIENT,
    "無法從用戶端取得暱稱。"
    )

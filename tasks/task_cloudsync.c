@@ -27,7 +27,9 @@
 #include "../configuration.h"
 #include "../file_path_special.h"
 #include "../network/cloud_sync_driver.h"
+#include "../msg_hash.h"
 #include "../paths.h"
+#include "../runloop.h"
 #include "../tasks/tasks_internal.h"
 #include "../verbosity.h"
 
@@ -35,6 +37,10 @@
 
 #define MANIFEST_FILENAME_LOCAL  "manifest.local"
 #define MANIFEST_FILENAME_SERVER "manifest.server"
+
+/* Both sides of a conflict are kept here, under the core assets directory:
+ * outside of the synced directories, so the copies are never uploaded */
+#define CONFLICT_DIRNAME         "cloud_sync_conflicts"
 
 #define CS_FILE_HASH(item_file) ((char*)((item_file) ? ((item_file)->userdata) : (NULL)))
 #define CS_FILE_KEY(item_file) ((item_file) ? ((item_file)->alt) : (NULL))
@@ -717,7 +723,226 @@ static void task_cloud_sync_fetch_server_file(task_cloud_sync_state_t *sync_stat
    }
 }
 
-static void task_cloud_sync_resolve_conflict(task_cloud_sync_state_t *sync_state)
+typedef struct
+{
+   char dir[DIR_MAX_LENGTH];
+   /* "<stem>.conflict-<side>-" */
+   char prefix[PATH_MAX_LENGTH];
+   /* ".srm", or empty */
+   char ext[64];
+} task_cloud_sync_conflict_name_t;
+
+static void task_cloud_sync_conflict_base_dir(char *s, size_t len)
+{
+   fill_pathname_join_special(s,
+         config_get_ptr()->paths.directory_core_assets,
+         CONFLICT_DIRNAME, len);
+}
+
+/* @key is the portable key of the file ("saves/<core>/<name>.srm").
+ * Backups keep the key's folders under the conflict directory. */
+static void task_cloud_sync_conflict_name(
+      task_cloud_sync_conflict_name_t *cn, const char *key, const char *side)
+{
+   char        base[DIR_MAX_LENGTH];
+   char        key_dir[PATH_MAX_LENGTH];
+   const char *slash    = strrchr(key, '/');
+   const char *name     = slash ? slash + 1 : key;
+   const char *dot      = strrchr(name, '.');
+   size_t      stem_len = dot ? (size_t)(dot - name) : strlen(name);
+   size_t      _len;
+
+   task_cloud_sync_conflict_base_dir(base, sizeof(base));
+   if (slash)
+   {
+      size_t n = (size_t)(slash - key);
+      if (n >= sizeof(key_dir))
+         n = sizeof(key_dir) - 1;
+      memcpy(key_dir, key, n);
+      key_dir[n] = '\0';
+      fill_pathname_join_special(cn->dir, base, key_dir, sizeof(cn->dir));
+   }
+   else
+      strlcpy(cn->dir, base, sizeof(cn->dir));
+   pathname_conform_slashes_to_os(cn->dir);
+
+   if (stem_len >= sizeof(cn->prefix))
+      stem_len = sizeof(cn->prefix) - 1;
+   memcpy(cn->prefix, name, stem_len);
+   cn->prefix[stem_len] = '\0';
+   _len = strlen(cn->prefix);
+   snprintf(cn->prefix + _len, sizeof(cn->prefix) - _len,
+         ".conflict-%s-", side);
+   strlcpy(cn->ext, dot ? dot : "", sizeof(cn->ext));
+}
+
+static void task_cloud_sync_conflict_path(
+      const task_cloud_sync_conflict_name_t *cn, char *s, size_t len)
+{
+   struct tm tm_;
+   char      stamp[32];
+   char      file[PATH_MAX_LENGTH];
+   time_t    cur_time = time(NULL);
+
+   rtime_localtime(&cur_time, &tm_);
+   strftime(stamp, sizeof(stamp), "%Y%m%d-%H%M%S", &tm_);
+   snprintf(file, sizeof(file), "%s%s%s", cn->prefix, stamp, cn->ext);
+   fill_pathname_join_special(s, cn->dir, file, len);
+}
+
+/* A backup of this side with this content is already there? Compared by
+ * MD5, so syncing the same conflict again does not pile up copies */
+static bool task_cloud_sync_conflict_has_backup(
+      const task_cloud_sync_conflict_name_t *cn, const char *hash)
+{
+   size_t              i;
+   bool                found      = false;
+   struct string_list *list       = NULL;
+   size_t              prefix_len = strlen(cn->prefix);
+   size_t              ext_len    = strlen(cn->ext);
+
+   if (string_is_empty(hash))
+      return false;
+   if (!(list = dir_list_new(cn->dir, NULL, false, true, true, false)))
+      return false;
+
+   for (i = 0; i < list->size && !found; i++)
+   {
+      const char *name = path_basename(list->elems[i].data);
+      size_t      name_len;
+      RFILE      *file;
+      char       *file_hash;
+
+      if (!name || strncmp(name, cn->prefix, prefix_len) != 0)
+         continue;
+      name_len = strlen(name);
+      if (    name_len < prefix_len + ext_len
+           || strcmp(name + name_len - ext_len, cn->ext) != 0)
+         continue;
+      if (!(file = filestream_open(list->elems[i].data,
+            RETRO_VFS_FILE_ACCESS_READ, RETRO_VFS_FILE_ACCESS_HINT_FREQUENT_ACCESS)))
+         continue;
+      file_hash = task_cloud_sync_md5_rfile(file);
+      filestream_close(file);
+      if (file_hash)
+      {
+         found = string_is_equal(file_hash, hash);
+         free(file_hash);
+      }
+   }
+   string_list_free(list);
+   return found;
+}
+
+/* Keeps a copy of the local version of a conflicting file. A failure
+ * only means there is no backup: the conflict is handled as before */
+static void task_cloud_sync_conflict_backup_local(struct item_file *current_file)
+{
+   task_cloud_sync_conflict_name_t cn;
+   char                            path[PATH_MAX_LENGTH];
+
+   if (   !current_file || string_is_empty(current_file->path)
+       || string_is_empty(CS_FILE_HASH(current_file)))
+      return;
+
+   task_cloud_sync_conflict_name(&cn, CS_FILE_KEY(current_file), "local");
+   if (task_cloud_sync_conflict_has_backup(&cn, CS_FILE_HASH(current_file)))
+   {
+      RARCH_LOG(CSPFX "Local backup of %s already exists.\n", CS_FILE_KEY(current_file));
+      return;
+   }
+
+   path_mkdir(cn.dir);
+   task_cloud_sync_conflict_path(&cn, path, sizeof(path));
+   if (filestream_copy(current_file->path, path) == 0)
+      RARCH_LOG(CSPFX "Kept the local version of %s in \"%s\".\n", CS_FILE_KEY(current_file), path);
+   else
+      RARCH_WARN(CSPFX "Failed to back up the local version of %s.\n", CS_FILE_KEY(current_file));
+}
+
+typedef struct
+{
+   task_cloud_sync_state_t        *sync_state;
+   task_cloud_sync_conflict_name_t cn;
+   char                            tmp_path[PATH_MAX_LENGTH];
+} task_cloud_sync_conflict_fetch_t;
+
+static void task_cloud_sync_conflict_fetch_cb(void *user_data, const char *path, bool success, RFILE *file)
+{
+   task_cloud_sync_conflict_fetch_t *fetch = (task_cloud_sync_conflict_fetch_t *)user_data;
+   task_cloud_sync_state_t          *sync_state;
+   bool                              kept = false;
+
+   if (!fetch)
+      return;
+   sync_state = fetch->sync_state;
+
+   if (success && file)
+   {
+      char *hash = task_cloud_sync_md5_rfile(file);
+      filestream_close(file);
+      /* the manifest's hash can be stale, so look again with the real one */
+      if (hash && !task_cloud_sync_conflict_has_backup(&fetch->cn, hash))
+      {
+         char new_path[PATH_MAX_LENGTH];
+         task_cloud_sync_conflict_path(&fetch->cn, new_path, sizeof(new_path));
+         if (filestream_rename(fetch->tmp_path, new_path) == 0)
+         {
+            RARCH_LOG(CSPFX "Kept the server version of %s in \"%s\".\n", path, new_path);
+            kept = true;
+         }
+      }
+      free(hash);
+   }
+   else
+      RARCH_WARN(CSPFX "Failed to back up the server version of %s.\n", path);
+
+   if (!kept)
+      filestream_delete(fetch->tmp_path);
+
+   slock_lock(tcs_running_lock);
+   sync_state->waiting--;
+   slock_unlock(tcs_running_lock);
+   free(fetch);
+}
+
+/* Downloads the server version of a conflicting file into the conflict
+ * directory, unless the same content is already kept there */
+static void task_cloud_sync_conflict_backup_server(
+      task_cloud_sync_state_t *sync_state, struct item_file *server_file)
+{
+   task_cloud_sync_conflict_fetch_t *fetch;
+   const char                       *key = CS_FILE_KEY(server_file);
+
+   if (CS_FILE_DELETED(server_file) || string_is_empty(key))
+      return;
+   if (!(fetch = (task_cloud_sync_conflict_fetch_t*)malloc(sizeof(*fetch))))
+      return;
+
+   fetch->sync_state = sync_state;
+   task_cloud_sync_conflict_name(&fetch->cn, key, "server");
+   if (task_cloud_sync_conflict_has_backup(&fetch->cn, CS_FILE_HASH(server_file)))
+   {
+      RARCH_LOG(CSPFX "Server backup of %s already exists.\n", key);
+      free(fetch);
+      return;
+   }
+
+   path_mkdir(fetch->cn.dir);
+   /* does not end in the extension, so it never counts as a backup */
+   /* one per file: several conflicts can be downloading at once */
+   snprintf(fetch->tmp_path, sizeof(fetch->tmp_path), "%s%s%s%s.tmp",
+         fetch->cn.dir, PATH_DEFAULT_SLASH(), "pending-", path_basename(key));
+   if (cloud_sync_read(key, fetch->tmp_path, task_cloud_sync_conflict_fetch_cb, fetch))
+      sync_state->waiting++;
+   else
+   {
+      RARCH_WARN(CSPFX "Failed to start the backup of the server version of %s.\n", key);
+      free(fetch);
+   }
+}
+
+static void task_cloud_sync_resolve_conflict(task_cloud_sync_state_t *sync_state, struct item_file *current_file)
 {
    /*
     * rather than pop up some UI let's just resolve it ourselves!
@@ -729,6 +954,9 @@ static void task_cloud_sync_resolve_conflict(task_cloud_sync_state_t *sync_state
     */
    struct item_file *server_file = &sync_state->server_manifest->list[sync_state->server_idx];
    RARCH_WARN(CSPFX "Conflicting change of %s.\n", CS_FILE_KEY(server_file));
+   /* neither side is touched; keep a copy of both so nothing can be lost */
+   task_cloud_sync_conflict_backup_local(current_file);
+   task_cloud_sync_conflict_backup_server(sync_state, server_file);
    task_cloud_sync_add_to_updated_manifest(sync_state, CS_FILE_KEY(server_file), CS_FILE_HASH(server_file), true);
    /* no need to mark need_manifest_uploaded, nothing changed */
    sync_state->conflicts = true;
@@ -870,7 +1098,7 @@ static void task_cloud_sync_check_server_current(task_cloud_sync_state_t *sync_s
 
    if (!include_local)
    {
-      task_cloud_sync_resolve_conflict(sync_state);
+      task_cloud_sync_resolve_conflict(sync_state, current_file);
       return;
    }
 
@@ -879,7 +1107,7 @@ static void task_cloud_sync_check_server_current(task_cloud_sync_state_t *sync_s
    current_changed = !string_is_equal(CS_FILE_HASH(local_file), CS_FILE_HASH(current_file));
 
    if (server_changed && current_changed)
-      task_cloud_sync_resolve_conflict(sync_state);
+      task_cloud_sync_resolve_conflict(sync_state, current_file);
    else if (current_changed)
       task_cloud_sync_upload_current_file(sync_state);
    else if (!CS_FILE_DELETED(server_file))
@@ -1098,7 +1326,7 @@ static void task_cloud_sync_diff_next(task_cloud_sync_state_t *sync_state)
                task_cloud_sync_delete_server_file(sync_state);
             else
                /* the server changed and local deleted, that's a conflict */
-               task_cloud_sync_resolve_conflict(sync_state);
+               task_cloud_sync_resolve_conflict(sync_state, NULL);
          }
          else
          {
@@ -1263,6 +1491,17 @@ static void task_cloud_sync_end_handler(void *user_data, const char *path, bool 
       if (sync_state->conflicts)
          strlcpy(title + _len, "conflicts", sizeof(title) - _len);
       task_set_title(task, strdup(title));
+
+      if (sync_state->conflicts)
+      {
+         char dir[DIR_MAX_LENGTH];
+         char msg[PATH_MAX_LENGTH];
+         task_cloud_sync_conflict_base_dir(dir, sizeof(dir));
+         snprintf(msg, sizeof(msg),
+               msg_hash_to_str(MSG_CLOUD_SYNC_CONFLICT_BACKUP), dir);
+         runloop_msg_queue_push(msg, strlen(msg), 2, 600, false, NULL,
+               MESSAGE_QUEUE_ICON_DEFAULT, MESSAGE_QUEUE_CATEGORY_INFO);
+      }
    }
 
 

@@ -14811,6 +14811,10 @@ MSG_HASH(
    "Failed to extract content from compressed file"
    )
 MSG_HASH(
+   MSG_CLOUD_SYNC_CONFLICT_BACKUP,
+   "Cloud Sync found conflicting changes. Nothing was overwritten; both versions are kept in: %s"
+   )
+MSG_HASH(
    MSG_FAILED_TO_GET_NICKNAME_FROM_CLIENT,
    "Failed to get nickname from client."
    )
