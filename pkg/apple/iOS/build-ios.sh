@@ -6,7 +6,8 @@
 # Then install: xcrun devicectl device install app --device <udid> pkg/apple/build/ipa/RetroArch.ipa
 set -euo pipefail
 
-APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+APPLE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 CORES_DIR="${CORES_DIR:-$APPLE_DIR/build/cores}"
 CORE_SRC="$CORES_DIR/pcsx_rearmed"
 JOBS="$(sysctl -n hw.ncpu)"
@@ -76,6 +77,8 @@ xcodebuild -project RetroArch_iOS13.xcodeproj -scheme "RetroArch iOS Release" \
 # so system/ lands in the frontend's system directory:
 #  - the user's own BIOS dumps (copyrighted: never commit them)
 #  - PPSSPP's data files (fonts, flash0, compat.ini), read from system/PPSSPP
+#  - overlays/: replaces stock overlay files (the stock Mega Drive overlay has
+#    no fast-forward button, unlike the PlayStation one)
 # Only the archived app is touched; export re-signs it.
 BIOS_DIR="${BIOS_DIR:-$APPLE_DIR/../../../bios}"
 STAGE="$(mktemp -d)"
@@ -89,8 +92,10 @@ if [ -d "$BIOS_DIR" ] ; then
 fi
 echo "Bundled BIOS: $(ls "$STAGE/system" | tr '\n' ' ')"
 cp -R "$PPSSPP_SRC/assets" "$STAGE/system/PPSSPP"
+mkdir -p "$STAGE/overlays/gamepads/Named_Overlays"
+cp "$SCRIPT_DIR/overlay-patches/"*.cfg "$STAGE/overlays/gamepads/Named_Overlays/"
 APP_ASSETS="build/RetroArchPS1.xcarchive/Products/Applications/RetroArch.app/assets.zip"
-(cd "$STAGE" && zip -qr "$APPLE_DIR/$APP_ASSETS" system)
+(cd "$STAGE" && zip -qr "$APPLE_DIR/$APP_ASSETS" system overlays)
 rm -rf "$STAGE"
 
 TEAM_ID="${TEAM:-$(sed -n 's/^DEVELOPMENT_TEAM = //p' iOS/Personal.xcconfig)}"
