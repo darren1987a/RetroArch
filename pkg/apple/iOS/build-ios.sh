@@ -1,8 +1,8 @@
 #!/bin/bash
 # Builds a sideloadable RetroArch for iPhone with the PCSX ReARMed (PS1)
-# and PPSSPP (PSP) cores, both pinned to release tags.
+# PPSSPP (PSP) and Genesis Plus GX (Mega Drive) cores, pinned to a tag / commit.
 # Usage: pkg/apple/iOS/build-ios.sh
-#   (override TEAM / BUNDLE_ID / CORES_DIR / CORE_TAG / PPSSPP_TAG / BIOS_DIR via env)
+#   (override TEAM / BUNDLE_ID / CORES_DIR / CORE_TAG / PPSSPP_TAG / GPGX_REF / BIOS_DIR via env)
 # Then install: xcrun devicectl device install app --device <udid> pkg/apple/build/ipa/RetroArch.ipa
 set -euo pipefail
 
@@ -22,6 +22,18 @@ make -C "$CORE_SRC" -f Makefile.libretro platform=ios-arm64 \
     IOSSDK="$(xcrun --sdk iphoneos --show-sdk-path)" \
     MINVERSION=-miphoneos-version-min=16.0 -j"$JOBS"
 cp "$CORE_SRC/pcsx_rearmed_libretro_ios.dylib" "$APPLE_DIR/iOS/modules/"
+
+# Mega Drive: Genesis Plus GX has no release tags, so it is pinned to a
+# commit (override with GPGX_REF). Its SRAM is saved as <game>.srm.
+GPGX_REF="${GPGX_REF:-393f70cd64c7334564c19a424c383f53986c13f4}"
+GPGX_SRC="$CORES_DIR/genesis_plus_gx"
+if [ ! -d "$GPGX_SRC" ] ; then
+    git clone https://github.com/libretro/Genesis-Plus-GX.git "$GPGX_SRC"
+fi
+git -C "$GPGX_SRC" checkout -q "$GPGX_REF"
+make -C "$GPGX_SRC" -f Makefile.libretro platform=ios-arm64 clean
+make -C "$GPGX_SRC" -f Makefile.libretro platform=ios-arm64     IOSSDK="$(xcrun --sdk iphoneos --show-sdk-path)"     MINVERSION=-miphoneos-version-min=16.0 -j"$JOBS"
+cp "$GPGX_SRC/genesis_plus_gx_libretro_ios.dylib" "$APPLE_DIR/iOS/modules/"
 
 # PSP: same recipe as libretro's own iOS CI for this core. A local
 # checkout next to retroarch/ (the user's own fork) is preferred; it is

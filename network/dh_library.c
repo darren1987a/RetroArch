@@ -41,7 +41,8 @@
  * Switch) are hidden from the menu */
 static const dh_library_system_t dh_library_systems[] = {
    { "PSGame",  "Sony - PlayStation",          "pcsx_rearmed_libretro" },
-   { "PSPGame", "Sony - PlayStation Portable", "ppsspp_libretro"       }
+   { "PSPGame", "Sony - PlayStation Portable", "ppsspp_libretro"       },
+   { "MDGame",  "Sega - Mega Drive - Genesis", "genesis_plus_gx_libretro" }
 };
 
 #define DH_LIBRARY_SHARE_TOKEN "/public/share/"
