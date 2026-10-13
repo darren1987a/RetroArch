@@ -41,10 +41,23 @@
 /* Both sides of a conflict are kept here, under the core assets directory:
  * outside of the synced directories, so the copies are never uploaded */
 #define CONFLICT_DIRNAME         "cloud_sync_conflicts"
+/* The files with a conflict as of the last sync, for the menu */
+#define CONFLICT_LIST_FILENAME   "conflicts.txt"
 
 #define CS_FILE_HASH(item_file) ((char*)((item_file) ? ((item_file)->userdata) : (NULL)))
 #define CS_FILE_KEY(item_file) ((item_file) ? ((item_file)->alt) : (NULL))
 #define CS_FILE_DELETED(item_file) (string_is_empty(CS_FILE_HASH(item_file)))
+
+/* What a sync of one conflicting file did, shown when the sync ends */
+enum task_cloud_sync_resolve_result
+{
+   CLOUD_SYNC_RESOLVE_NONE = 0,
+   CLOUD_SYNC_RESOLVE_LOCAL,          /* this device's version is now on the server */
+   CLOUD_SYNC_RESOLVE_SERVER,         /* the server's version is now on this device */
+   CLOUD_SYNC_RESOLVE_SERVER_MISSING, /* nothing to download */
+   CLOUD_SYNC_RESOLVE_BACKUP_FAILED,
+   CLOUD_SYNC_RESOLVE_FAILED
+};
 
 enum task_cloud_sync_phase
 {
@@ -75,12 +88,28 @@ typedef struct
    bool need_manifest_uploaded;
    bool failures;
    bool conflicts;
+   /* Conflicts found by this sync: the key, and in attr.i what kind
+    * (CLOUD_SYNC_CONFLICT_*), for the menu */
+   struct string_list *conflict_list;
+   /* The user chose a side for this file; applied when the diff reaches it */
+   bool resolve_pending;
+   bool resolve_prefer_local;
+   char resolve_key[PATH_MAX_LENGTH];
+   enum task_cloud_sync_resolve_result resolve_result;
    uint32_t uploads;
    uint32_t downloads;
    retro_time_t start_time;
 } task_cloud_sync_state_t;
 
 static slock_t *tcs_running_lock = NULL;
+
+/* The side chosen from the menu, taken by the next sync */
+static struct
+{
+   bool pending;
+   bool prefer_local;
+   char key[PATH_MAX_LENGTH];
+} tcs_resolve_request;
 
 static void task_cloud_sync_begin_handler(void *user_data, const char *path, bool success, RFILE *file)
 {
@@ -836,28 +865,32 @@ static bool task_cloud_sync_conflict_has_backup(
 
 /* Keeps a copy of the local version of a conflicting file. A failure
  * only means there is no backup: the conflict is handled as before */
-static void task_cloud_sync_conflict_backup_local(struct item_file *current_file)
+static bool task_cloud_sync_conflict_backup_local(struct item_file *current_file)
 {
    task_cloud_sync_conflict_name_t cn;
    char                            path[PATH_MAX_LENGTH];
 
+   /* no local file (or nothing known about it): nothing to keep */
    if (   !current_file || string_is_empty(current_file->path)
        || string_is_empty(CS_FILE_HASH(current_file)))
-      return;
+      return true;
 
    task_cloud_sync_conflict_name(&cn, CS_FILE_KEY(current_file), "local");
    if (task_cloud_sync_conflict_has_backup(&cn, CS_FILE_HASH(current_file)))
    {
       RARCH_LOG(CSPFX "Local backup of %s already exists.\n", CS_FILE_KEY(current_file));
-      return;
+      return true;
    }
 
    path_mkdir(cn.dir);
    task_cloud_sync_conflict_path(&cn, path, sizeof(path));
    if (filestream_copy(current_file->path, path) == 0)
+   {
       RARCH_LOG(CSPFX "Kept the local version of %s in \"%s\".\n", CS_FILE_KEY(current_file), path);
-   else
-      RARCH_WARN(CSPFX "Failed to back up the local version of %s.\n", CS_FILE_KEY(current_file));
+      return true;
+   }
+   RARCH_WARN(CSPFX "Failed to back up the local version of %s.\n", CS_FILE_KEY(current_file));
+   return false;
 }
 
 typedef struct
@@ -942,6 +975,236 @@ static void task_cloud_sync_conflict_backup_server(
    }
 }
 
+static void task_cloud_sync_upload_current_file(task_cloud_sync_state_t *sync_state);
+static void task_cloud_sync_delete_current_file(task_cloud_sync_state_t *sync_state);
+static void task_cloud_sync_delete_server_file(task_cloud_sync_state_t *sync_state);
+
+/* Where the file with this key lives on this device, as when fetching */
+static bool task_cloud_sync_local_path_for_key(const char *key, char *s, size_t len)
+{
+   size_t              i;
+   struct string_list *dirlist = task_cloud_sync_directory_map();
+   const char         *slash   = strchr(key, '/');
+
+   s[0] = '\0';
+   if (!slash)
+      return false;
+   for (i = 0; i < dirlist->size; i++)
+   {
+      if (!string_starts_with(key, dirlist->elems[i].data))
+         continue;
+      fill_pathname_join_special(s,
+            (const char*)dirlist->elems[i].userdata, slash + 1, len);
+      pathname_conform_slashes_to_os(s);
+      return true;
+   }
+   return false;
+}
+
+static void task_cloud_sync_note_conflict(task_cloud_sync_state_t *sync_state,
+      const char *key, char kind);
+
+typedef struct
+{
+   task_cloud_sync_state_t        *sync_state;
+   struct item_file               *server_file;
+   task_cloud_sync_conflict_name_t cn;
+   char                            filename[PATH_MAX_LENGTH];
+   char                            tmp_path[PATH_MAX_LENGTH];
+} task_cloud_sync_resolve_fetch_t;
+
+/* The server's version, downloaded next to the conflict backups, replaces the
+ * local file. Only once it is there in full does the local file get touched,
+ * so a missing file on the server leaves everything as it was */
+static void task_cloud_sync_resolve_fetch_cb(void *user_data, const char *path, bool success, RFILE *file)
+{
+   task_cloud_sync_resolve_fetch_t *fetch = (task_cloud_sync_resolve_fetch_t *)user_data;
+   task_cloud_sync_state_t         *sync_state;
+   struct item_file                *server_file;
+   char                            *hash   = NULL;
+   bool                             copied = false;
+
+   if (!fetch)
+      return;
+   sync_state  = fetch->sync_state;
+   server_file = fetch->server_file;
+
+   if (success && file)
+   {
+      char dir[DIR_MAX_LENGTH];
+      hash = task_cloud_sync_md5_rfile(file);
+      filestream_close(file);
+      fill_pathname_basedir(dir, fetch->filename, sizeof(dir));
+      path_mkdir(dir);
+      copied = hash && filestream_copy(fetch->tmp_path, fetch->filename) == 0;
+      if (copied)
+      {
+         /* what was downloaded is also the server's backup */
+         if (!task_cloud_sync_conflict_has_backup(&fetch->cn, hash))
+         {
+            char new_path[PATH_MAX_LENGTH];
+            task_cloud_sync_conflict_path(&fetch->cn, new_path, sizeof(new_path));
+            if (filestream_rename(fetch->tmp_path, new_path) == 0)
+               RARCH_LOG(CSPFX "Kept the server version of %s in \"%s\".\n", path, new_path);
+         }
+      }
+   }
+
+   filestream_delete(fetch->tmp_path); /* no-op once it was renamed */
+
+   if (copied)
+   {
+      RARCH_LOG(CSPFX "Replaced the local file with the server's version of \"%s\".\n", path);
+      task_cloud_sync_add_to_updated_manifest(sync_state, path, hash, false);
+      task_cloud_sync_add_to_updated_manifest(sync_state, path, hash, true);
+      if (!string_is_equal(hash, CS_FILE_HASH(server_file)))
+         sync_state->need_manifest_uploaded = true;
+      sync_state->downloads++;
+      sync_state->resolve_result = CLOUD_SYNC_RESOLVE_SERVER;
+   }
+   else
+   {
+      /* nothing changed: still a conflict */
+      free(hash);
+      RARCH_WARN(CSPFX "Could not get the server's version of \"%s\".\n", path);
+      task_cloud_sync_add_to_updated_manifest(sync_state, path, CS_FILE_HASH(server_file), true);
+      sync_state->conflicts      = true;
+      task_cloud_sync_note_conflict(sync_state, path, CLOUD_SYNC_CONFLICT_BOTH);
+      /* a successful read without a file is a 404: the server has nothing
+       * for this key (its manifest still lists it) */
+      sync_state->resolve_result = (success && !file) ? CLOUD_SYNC_RESOLVE_SERVER_MISSING
+                                                      : CLOUD_SYNC_RESOLVE_FAILED;
+   }
+
+   slock_lock(tcs_running_lock);
+   sync_state->waiting--;
+   slock_unlock(tcs_running_lock);
+   free(fetch);
+}
+
+/* Applies the side the user chose to the conflicting file the diff is at.
+ * The version that gets replaced is kept first (see the conflict backups).
+ * Returns false if nothing was done and it is still a conflict */
+static bool task_cloud_sync_resolve_apply(task_cloud_sync_state_t *sync_state,
+      struct item_file *current_file)
+{
+   struct item_file *server_file = &sync_state->server_manifest->list[sync_state->server_idx];
+   const char       *key         = CS_FILE_KEY(server_file);
+   task_cloud_sync_resolve_fetch_t *fetch;
+
+   if (sync_state->resolve_prefer_local)
+   {
+      /* the server's copy is about to be overwritten (or deleted) */
+      task_cloud_sync_conflict_backup_server(sync_state, server_file);
+      if (current_file)
+         task_cloud_sync_upload_current_file(sync_state);
+      else
+         task_cloud_sync_delete_server_file(sync_state);
+      sync_state->resolve_result = CLOUD_SYNC_RESOLVE_LOCAL;
+      return true;
+   }
+
+   /* the local file is about to be overwritten (or deleted) */
+   if (!task_cloud_sync_conflict_backup_local(current_file))
+   {
+      sync_state->resolve_result = CLOUD_SYNC_RESOLVE_BACKUP_FAILED;
+      return false;
+   }
+
+   if (CS_FILE_DELETED(server_file))
+   {
+      /* the server's version is that the file is gone */
+      if (current_file)
+         task_cloud_sync_delete_current_file(sync_state);
+      task_cloud_sync_add_to_updated_manifest(sync_state, key, CS_FILE_HASH(server_file), false);
+      sync_state->resolve_result = CLOUD_SYNC_RESOLVE_SERVER;
+      return true;
+   }
+
+   if (!(fetch = (task_cloud_sync_resolve_fetch_t*)malloc(sizeof(*fetch))))
+   {
+      sync_state->resolve_result = CLOUD_SYNC_RESOLVE_FAILED;
+      return false;
+   }
+   fetch->sync_state  = sync_state;
+   fetch->server_file = server_file;
+   task_cloud_sync_conflict_name(&fetch->cn, key, "server");
+   if (!task_cloud_sync_local_path_for_key(key, fetch->filename, sizeof(fetch->filename)))
+   {
+      RARCH_WARN(CSPFX "Don't know where to put %s!\n", key);
+      free(fetch);
+      sync_state->resolve_result = CLOUD_SYNC_RESOLVE_FAILED;
+      return false;
+   }
+   path_mkdir(fetch->cn.dir);
+   fill_pathname_join_special(fetch->tmp_path, fetch->cn.dir, "pending-resolve.tmp",
+         sizeof(fetch->tmp_path));
+   if (cloud_sync_read(key, fetch->tmp_path, task_cloud_sync_resolve_fetch_cb, fetch))
+   {
+      sync_state->waiting++;
+      return true;
+   }
+   free(fetch);
+   sync_state->resolve_result = CLOUD_SYNC_RESOLVE_FAILED;
+   return false;
+}
+
+static void task_cloud_sync_note_conflict(task_cloud_sync_state_t *sync_state,
+      const char *key, char kind)
+{
+   union string_list_elem_attr attr;
+
+   attr.i = kind;
+   slock_lock(tcs_running_lock);
+   if (sync_state->conflict_list || (sync_state->conflict_list = string_list_new()))
+      string_list_append(sync_state->conflict_list, key, attr);
+   slock_unlock(tcs_running_lock);
+}
+
+static void task_cloud_sync_conflict_list_path(char *s, size_t len)
+{
+   char dir[DIR_MAX_LENGTH];
+   task_cloud_sync_conflict_base_dir(dir, sizeof(dir));
+   fill_pathname_join_special(s, dir, CONFLICT_LIST_FILENAME, len);
+}
+
+/* One conflict per line: the kind, a tab, the key */
+static void task_cloud_sync_write_conflict_list(task_cloud_sync_state_t *sync_state)
+{
+   size_t i;
+   char   path[PATH_MAX_LENGTH];
+   char  *text;
+   size_t cap = 1;
+   size_t pos = 0;
+
+   task_cloud_sync_conflict_list_path(path, sizeof(path));
+
+   if (!sync_state->conflict_list || sync_state->conflict_list->size == 0)
+   {
+      if (path_is_valid(path))
+         filestream_delete(path);
+      return;
+   }
+
+   for (i = 0; i < sync_state->conflict_list->size; i++)
+      cap += strlen(sync_state->conflict_list->elems[i].data) + 3;
+   if (!(text = (char*)malloc(cap)))
+      return;
+   text[0] = '\0';
+   for (i = 0; i < sync_state->conflict_list->size; i++)
+      pos += snprintf(text + pos, cap - pos, "%c\t%s\n",
+            (char)sync_state->conflict_list->elems[i].attr.i,
+            sync_state->conflict_list->elems[i].data);
+
+   {
+      char dir[DIR_MAX_LENGTH];
+      task_cloud_sync_conflict_base_dir(dir, sizeof(dir));
+      path_mkdir(dir);
+   }
+   filestream_write_file(path, text, (int64_t)pos);
+   free(text);
+}
+
 static void task_cloud_sync_resolve_conflict(task_cloud_sync_state_t *sync_state, struct item_file *current_file)
 {
    /*
@@ -953,6 +1216,24 @@ static void task_cloud_sync_resolve_conflict(task_cloud_sync_state_t *sync_state
     * If we ignore it then we need to keep it out of the new local manifest
     */
    struct item_file *server_file = &sync_state->server_manifest->list[sync_state->server_idx];
+
+   /* the user already chose a side for this one */
+   if (    sync_state->resolve_pending
+        && string_is_equal_noncase(sync_state->resolve_key, CS_FILE_KEY(server_file)))
+   {
+      sync_state->resolve_pending = false;
+      RARCH_LOG(CSPFX "Resolving the conflict of %s with the %s version.\n",
+            CS_FILE_KEY(server_file),
+            sync_state->resolve_prefer_local ? "local" : "server");
+      if (task_cloud_sync_resolve_apply(sync_state, current_file))
+         return;
+      /* could not do it: it stays a conflict, and nothing was changed */
+   }
+
+   task_cloud_sync_note_conflict(sync_state, CS_FILE_KEY(server_file),
+         !current_file ? CLOUD_SYNC_CONFLICT_LOCAL_DELETED
+         : CS_FILE_DELETED(server_file) ? CLOUD_SYNC_CONFLICT_SERVER_DELETED
+         : CLOUD_SYNC_CONFLICT_BOTH);
    RARCH_WARN(CSPFX "Conflicting change of %s.\n", CS_FILE_KEY(server_file));
    /* neither side is touched; keep a copy of both so nothing can be lost */
    task_cloud_sync_conflict_backup_local(current_file);
@@ -960,6 +1241,34 @@ static void task_cloud_sync_resolve_conflict(task_cloud_sync_state_t *sync_state
    task_cloud_sync_add_to_updated_manifest(sync_state, CS_FILE_KEY(server_file), CS_FILE_HASH(server_file), true);
    /* no need to mark need_manifest_uploaded, nothing changed */
    sync_state->conflicts = true;
+}
+
+/* A file deleted here and changed on the server is a conflict only for the
+ * sync that finds it: the next one sees a file the server has and this device
+ * does not know, and fetches it. So a side chosen for it is applied there.
+ * Returns true if the file was handled (the server's copy is deleted) */
+static bool task_cloud_sync_resolve_missing_local(task_cloud_sync_state_t *sync_state)
+{
+   struct item_file *server_file = &sync_state->server_manifest->list[sync_state->server_idx];
+
+   if (    !sync_state->resolve_pending
+        || !string_is_equal_noncase(sync_state->resolve_key, CS_FILE_KEY(server_file)))
+      return false;
+
+   sync_state->resolve_pending = false;
+   if (!sync_state->resolve_prefer_local)
+   {
+      /* the usual fetch brings the server's version back */
+      sync_state->resolve_result = CLOUD_SYNC_RESOLVE_SERVER;
+      return false;
+   }
+
+   RARCH_LOG(CSPFX "Resolving the conflict of %s with the local version (deleted).\n",
+         CS_FILE_KEY(server_file));
+   task_cloud_sync_conflict_backup_server(sync_state, server_file);
+   task_cloud_sync_delete_server_file(sync_state);
+   sync_state->resolve_result = CLOUD_SYNC_RESOLVE_LOCAL;
+   return true;
 }
 
 static void task_cloud_sync_upload_cb(void *user_data, const char *path, bool success, RFILE *file)
@@ -1271,7 +1580,10 @@ static void task_cloud_sync_diff_next(task_cloud_sync_state_t *sync_state)
       {
          /* the server has a file we don't have, we check the hash */
          if (!CS_FILE_DELETED(server_file))
-            task_cloud_sync_fetch_server_file(sync_state);
+         {
+            if (!task_cloud_sync_resolve_missing_local(sync_state))
+               task_cloud_sync_fetch_server_file(sync_state);
+         }
          else
          {
             /* it's deleted on the server, remember that and mark the sync of the delete */
@@ -1443,6 +1755,8 @@ static void task_cloud_sync_update_manifests(task_cloud_sync_state_t *sync_state
    char   manifest_path[PATH_MAX_LENGTH];
    RFILE *file   = NULL;
 
+   task_cloud_sync_write_conflict_list(sync_state);
+
    task_cloud_sync_manifest_filename(manifest_path, sizeof(manifest_path), false);
    file = task_cloud_sync_write_updated_manifest(sync_state->updated_local_manifest, manifest_path);
    if (file)
@@ -1469,6 +1783,41 @@ static void task_cloud_sync_update_manifests(task_cloud_sync_state_t *sync_state
       sync_state->phase = CLOUD_SYNC_PHASE_END;
 }
 
+static void task_cloud_sync_notify_resolve(task_cloud_sync_state_t *sync_state)
+{
+   const char *msg;
+
+   /* asked for a file that was not in conflict any more */
+   if (sync_state->resolve_pending)
+      sync_state->resolve_result = CLOUD_SYNC_RESOLVE_NONE;
+
+   switch (sync_state->resolve_result)
+   {
+      case CLOUD_SYNC_RESOLVE_LOCAL:
+         msg = msg_hash_to_str(MSG_CLOUD_SYNC_RESOLVED_LOCAL);
+         break;
+      case CLOUD_SYNC_RESOLVE_SERVER:
+         msg = msg_hash_to_str(MSG_CLOUD_SYNC_RESOLVED_SERVER);
+         break;
+      case CLOUD_SYNC_RESOLVE_SERVER_MISSING:
+         msg = msg_hash_to_str(MSG_CLOUD_SYNC_RESOLVE_SERVER_MISSING);
+         break;
+      case CLOUD_SYNC_RESOLVE_BACKUP_FAILED:
+         msg = msg_hash_to_str(MSG_CLOUD_SYNC_RESOLVE_BACKUP_FAILED);
+         break;
+      case CLOUD_SYNC_RESOLVE_FAILED:
+         msg = msg_hash_to_str(MSG_CLOUD_SYNC_RESOLVE_FAILED);
+         break;
+      default:
+         if (!sync_state->resolve_pending)
+            return;
+         msg = msg_hash_to_str(MSG_CLOUD_SYNC_RESOLVE_NOT_FOUND);
+         break;
+   }
+   runloop_msg_queue_push(msg, strlen(msg), 2, 300, false, NULL,
+         MESSAGE_QUEUE_ICON_DEFAULT, MESSAGE_QUEUE_CATEGORY_INFO);
+}
+
 static void task_cloud_sync_end_handler(void *user_data, const char *path, bool success, RFILE *file)
 {
    retro_task_t            *task       = (retro_task_t *)user_data;
@@ -1491,6 +1840,8 @@ static void task_cloud_sync_end_handler(void *user_data, const char *path, bool 
       if (sync_state->conflicts)
          strlcpy(title + _len, "conflicts", sizeof(title) - _len);
       task_set_title(task, strdup(title));
+
+      task_cloud_sync_notify_resolve(sync_state);
 
       if (sync_state->conflicts)
       {
@@ -1598,6 +1949,8 @@ static void task_cloud_sync_cb(retro_task_t *task, void *task_data,
       file_list_free(sync_state->updated_server_manifest);
    if (sync_state->updated_local_manifest)
       file_list_free(sync_state->updated_local_manifest);
+   if (sync_state->conflict_list)
+      string_list_free(sync_state->conflict_list);
 
    free(sync_state);
 }
@@ -1645,6 +1998,15 @@ void task_push_cloud_sync(void)
    sync_state->phase      = CLOUD_SYNC_PHASE_BEGIN;
    sync_state->start_time = cpu_features_get_time_usec();
 
+   if (tcs_resolve_request.pending)
+   {
+      sync_state->resolve_pending      = true;
+      sync_state->resolve_prefer_local = tcs_resolve_request.prefer_local;
+      strlcpy(sync_state->resolve_key, tcs_resolve_request.key,
+            sizeof(sync_state->resolve_key));
+      tcs_resolve_request.pending      = false;
+   }
+
    strlcpy(task_title, "Cloud Sync in progress", sizeof(task_title));
 
    task->state    = sync_state;
@@ -1669,4 +2031,68 @@ void task_push_cloud_sync_update_driver(void)
     */
    task_cloud_sync_manifest_filename(manifest_path, sizeof(manifest_path), false);
    filestream_delete(manifest_path);
+}
+
+bool task_push_cloud_sync_resolve(const char *key, bool prefer_local)
+{
+   task_finder_data_t find_data;
+
+   if (string_is_empty(key) || !config_get_ptr()->bools.cloud_sync_enable)
+      return false;
+   if (!tcs_running_lock)
+      tcs_running_lock = slock_new();
+
+   find_data.func = task_cloud_sync_task_finder;
+   if (task_queue_find(&find_data))
+      return false;
+
+   tcs_resolve_request.pending      = true;
+   tcs_resolve_request.prefer_local = prefer_local;
+   strlcpy(tcs_resolve_request.key, key, sizeof(tcs_resolve_request.key));
+   task_push_cloud_sync();
+   return true;
+}
+
+struct string_list *task_cloud_sync_get_conflicts(void)
+{
+   char                path[PATH_MAX_LENGTH];
+   void               *buf   = NULL;
+   int64_t             len   = 0;
+   char               *line;
+   struct string_list *list  = NULL;
+
+   task_cloud_sync_conflict_list_path(path, sizeof(path));
+   if (!path_is_valid(path) || !filestream_read_file(path, &buf, &len) || !buf)
+      return NULL;
+   if (!(list = string_list_new()))
+   {
+      free(buf);
+      return NULL;
+   }
+
+   for (line = (char*)buf; line && *line; )
+   {
+      union string_list_elem_attr attr;
+      char *next = strchr(line, '\n');
+      if (next)
+         *next++ = '\0';
+      if (line[0] && line[1] == '\t' && line[2])
+      {
+         attr.i = (unsigned char)line[0];
+         string_list_append(list, line + 2, attr);
+      }
+      line = next;
+   }
+   free(buf);
+   if (list->size == 0)
+   {
+      string_list_free(list);
+      return NULL;
+   }
+   return list;
+}
+
+void task_cloud_sync_get_conflict_dir(char *s, size_t len)
+{
+   task_cloud_sync_conflict_base_dir(s, len);
 }

@@ -86,6 +86,9 @@
 #include "menu_driver.h"
 #include "menu_entries.h"
 #include "dh_library_menu.h"
+#if defined(HAVE_NETWORKING) && defined(HAVE_CLOUDSYNC)
+#include "cloud_sync_conflict_menu.h"
+#endif
 #if defined(HAVE_CG) || defined(HAVE_GLSL) || defined(HAVE_SLANG) || defined(HAVE_HLSL)
 #include "menu_shader.h"
 #endif
@@ -11093,6 +11096,12 @@ unsigned menu_displaylist_build_list(
                         false) == 0)
                   count++;
             }
+
+#if defined(HAVE_NETWORKING) && defined(HAVE_CLOUDSYNC)
+            /* DHGameCenter: choose a side for the files in conflict */
+            if (cloud_sync_conflict_menu_append_entry(list))
+               count++;
+#endif
          }
          break;
 #ifdef HAVE_MIST

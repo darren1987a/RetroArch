@@ -588,7 +588,10 @@ static void webdav_read_cb(retro_task_t *task, void *task_data, void *user_data,
       return;
    }
 
-   if (success && data->data && webdav_cb_st)
+   /* A 404 counts as success (there may be no manifest yet), but its body is
+    * the server's error page: it is not the file, so nothing is written and
+    * the callback gets no file */
+   if (success && data->data && data->status != 404 && webdav_cb_st)
    {
       /* TODO/FIXME: it would be better if writing
        * to the file happened during the network reads */

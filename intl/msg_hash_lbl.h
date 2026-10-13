@@ -6778,3 +6778,43 @@ MSG_HASH(
    MENU_ENUM_LABEL_DEFERRED_DH_LIBRARY_DELETE,
    "deferred_dh_library_delete"
    )
+MSG_HASH(
+   MENU_ENUM_LABEL_CLOUD_SYNC_CONFLICTS,
+   "cloud_sync_conflicts"
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_DEFERRED_CLOUD_SYNC_CONFLICTS,
+   "deferred_cloud_sync_conflicts"
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_DEFERRED_CLOUD_SYNC_CONFLICT_FILE,
+   "deferred_cloud_sync_conflict_file"
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_DEFERRED_CLOUD_SYNC_CONFLICT_CONFIRM,
+   "deferred_cloud_sync_conflict_confirm"
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_CLOUD_SYNC_CONFLICT_FILE,
+   "cloud_sync_conflict_file"
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_CLOUD_SYNC_CONFLICT_INFO,
+   "cloud_sync_conflict_info"
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_CLOUD_SYNC_CONFLICT_USE_LOCAL,
+   "cloud_sync_conflict_use_local"
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_CLOUD_SYNC_CONFLICT_USE_SERVER,
+   "cloud_sync_conflict_use_server"
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_CLOUD_SYNC_CONFLICT_CONFIRM,
+   "cloud_sync_conflict_confirm"
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_CLOUD_SYNC_CONFLICT_CANCEL,
+   "cloud_sync_conflict_cancel"
+   )

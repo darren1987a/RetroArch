@@ -276,6 +276,28 @@ extern const char* const input_builtin_autoconfs[];
 void task_push_cloud_sync_update_driver(void);
 void task_push_cloud_sync(void);
 
+/* How a file got into conflict, as listed by task_cloud_sync_get_conflicts() */
+enum
+{
+   CLOUD_SYNC_CONFLICT_BOTH           = 'B', /* changed on this device and on the server */
+   CLOUD_SYNC_CONFLICT_LOCAL_DELETED  = 'L', /* deleted here, changed on the server */
+   CLOUD_SYNC_CONFLICT_SERVER_DELETED = 'S'  /* changed here, the server's record says deleted */
+};
+
+/* The files that were in conflict at the last sync, or NULL: the elems'
+ * data is the file's key ("saves/<core>/<name>"), attr.i the kind. Free
+ * with string_list_free() */
+struct string_list *task_cloud_sync_get_conflicts(void);
+
+/* Syncs, and settles the conflict of this file by taking this device's
+ * version (prefer_local) or the server's. The version that is replaced
+ * is kept in the conflict backup directory first. False if it could not
+ * be started (a sync is running, or Cloud Sync is off) */
+bool task_push_cloud_sync_resolve(const char *key, bool prefer_local);
+
+/* Where the conflict backups are */
+void task_cloud_sync_get_conflict_dir(char *s, size_t len);
+
 RETRO_END_DECLS
 
 #endif

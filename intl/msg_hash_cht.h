@@ -15284,3 +15284,115 @@ MSG_HASH(
    MSG_DH_LIBRARY_SAVE_PATH,
    "存放位置："
    )
+MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_CLOUD_SYNC_CONFLICTS,
+   "解決同步衝突"
+   )
+MSG_HASH(
+   MENU_ENUM_SUBLABEL_CLOUD_SYNC_CONFLICTS,
+   "列出雲端同步發生衝突的檔案，可選擇以本機或伺服器的版本為準。被取代的版本會先備份。"
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_CLOUD_SYNC_CONFLICT_USE_LOCAL,
+   "以本機為準"
+   )
+MSG_HASH(
+   MENU_ENUM_SUBLABEL_CLOUD_SYNC_CONFLICT_USE_LOCAL,
+   "用這台裝置上的版本取代伺服器上的版本。"
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_CLOUD_SYNC_CONFLICT_USE_SERVER,
+   "以伺服器為準"
+   )
+MSG_HASH(
+   MENU_ENUM_SUBLABEL_CLOUD_SYNC_CONFLICT_USE_SERVER,
+   "用伺服器上的版本取代這台裝置上的版本。"
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_CLOUD_SYNC_CONFLICT_CONFIRM,
+   "確定取代"
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_CLOUD_SYNC_CONFLICT_CANCEL,
+   "取消"
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_CONFLICTS_TITLE,
+   "同步衝突"
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_CONFLICTS_NONE,
+   "目前沒有衝突的檔案。"
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_CONFLICTS_HINT,
+   "選擇檔案，決定要保留哪一邊的版本。"
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_CONFLICT_CONFIRM_TITLE,
+   "確認"
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_CONFLICT_KIND_BOTH,
+   "本機和伺服器都修改過。"
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_CONFLICT_KIND_LOCAL_DELETED,
+   "本機已刪除，伺服器上有新的修改。"
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_CONFLICT_KIND_SERVER_DELETED,
+   "本機有修改，但伺服器的紀錄是已刪除。"
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_CONFLICT_WILL_REPLACE_SERVER,
+   "伺服器上的版本會被這台裝置的版本取代。"
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_CONFLICT_WILL_DELETE_SERVER,
+   "伺服器上的版本會被刪除（這台裝置已經刪掉了）。"
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_CONFLICT_WILL_REPLACE_LOCAL,
+   "這台裝置上的版本會被伺服器的版本取代。"
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_CONFLICT_WILL_DELETE_LOCAL,
+   "這台裝置上的檔案會被刪除（伺服器的紀錄是已刪除）。"
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_CONFLICT_NO_SERVER_FILE,
+   "如果伺服器上已經沒有檔案可下載，什麼都不會改變。"
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_CONFLICT_BACKED_UP,
+   "被取代的版本會先備份在："
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_RESOLVED_LOCAL,
+   "雲端同步：已用本機的版本取代伺服器上的版本。"
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_RESOLVED_SERVER,
+   "雲端同步：已用伺服器的版本取代本機的版本。"
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_RESOLVE_SERVER_MISSING,
+   "雲端同步：伺服器上沒有檔案可下載，什麼都沒有改變。"
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_RESOLVE_BACKUP_FAILED,
+   "雲端同步：無法備份將被取代的版本，什麼都沒有改變。"
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_RESOLVE_FAILED,
+   "雲端同步：無法處理這個衝突，什麼都沒有改變。"
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_RESOLVE_NOT_FOUND,
+   "雲端同步：這個檔案已經沒有衝突了。"
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_RESOLVE_BUSY,
+   "雲端同步正在進行或未啟用，請稍後再試。"
+   )

@@ -17156,3 +17156,115 @@ MSG_HASH(
    MSG_DH_LIBRARY_SAVE_PATH,
    "Save to: "
    )
+MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_CLOUD_SYNC_CONFLICTS,
+   "Resolve Sync Conflicts"
+   )
+MSG_HASH(
+   MENU_ENUM_SUBLABEL_CLOUD_SYNC_CONFLICTS,
+   "Files whose Cloud Sync is in conflict: choose to keep this device's version or the server's. The replaced version is backed up first."
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_CLOUD_SYNC_CONFLICT_USE_LOCAL,
+   "Use This Device's Version"
+   )
+MSG_HASH(
+   MENU_ENUM_SUBLABEL_CLOUD_SYNC_CONFLICT_USE_LOCAL,
+   "Replace the server's version with the one on this device."
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_CLOUD_SYNC_CONFLICT_USE_SERVER,
+   "Use the Server's Version"
+   )
+MSG_HASH(
+   MENU_ENUM_SUBLABEL_CLOUD_SYNC_CONFLICT_USE_SERVER,
+   "Replace the version on this device with the server's."
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_CLOUD_SYNC_CONFLICT_CONFIRM,
+   "Replace"
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_CLOUD_SYNC_CONFLICT_CANCEL,
+   "Cancel"
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_CONFLICTS_TITLE,
+   "Sync Conflicts"
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_CONFLICTS_NONE,
+   "No files are in conflict."
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_CONFLICTS_HINT,
+   "Select a file to choose which version to keep."
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_CONFLICT_CONFIRM_TITLE,
+   "Confirm"
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_CONFLICT_KIND_BOTH,
+   "Changed on this device and on the server."
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_CONFLICT_KIND_LOCAL_DELETED,
+   "Deleted on this device, changed on the server."
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_CONFLICT_KIND_SERVER_DELETED,
+   "Changed on this device; the server's record says it was deleted."
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_CONFLICT_WILL_REPLACE_SERVER,
+   "The server's version will be replaced by the one on this device."
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_CONFLICT_WILL_DELETE_SERVER,
+   "The server's version will be deleted, as it is on this device."
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_CONFLICT_WILL_REPLACE_LOCAL,
+   "The version on this device will be replaced by the server's."
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_CONFLICT_WILL_DELETE_LOCAL,
+   "The file on this device will be deleted, as it is on the server."
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_CONFLICT_NO_SERVER_FILE,
+   "If the server has no file to download, nothing is changed."
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_CONFLICT_BACKED_UP,
+   "The version that is replaced is backed up first, in:"
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_RESOLVED_LOCAL,
+   "Cloud Sync: this device's version is now on the server."
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_RESOLVED_SERVER,
+   "Cloud Sync: this device now has the server's version."
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_RESOLVE_SERVER_MISSING,
+   "Cloud Sync: the server has no file to download. Nothing was changed."
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_RESOLVE_BACKUP_FAILED,
+   "Cloud Sync: could not back up the version to be replaced. Nothing was changed."
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_RESOLVE_FAILED,
+   "Cloud Sync: could not settle the conflict. Nothing was changed."
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_RESOLVE_NOT_FOUND,
+   "Cloud Sync: that file is not in conflict any more."
+   )
+MSG_HASH(
+   MSG_CLOUD_SYNC_RESOLVE_BUSY,
+   "Cloud Sync is busy or turned off. Try again in a moment."
+   )

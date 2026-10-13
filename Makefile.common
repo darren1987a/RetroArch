@@ -2366,6 +2366,11 @@ ifeq ($(HAVE_NETWORKING), 1)
    ifeq ($(HAVE_MENU_COMMON), 1)
       OBJ += menu/dh_library_menu.o
    endif
+   ifeq ($(HAVE_CLOUDSYNC), 1)
+      ifeq ($(HAVE_MENU_COMMON), 1)
+         OBJ += menu/cloud_sync_conflict_menu.o
+      endif
+   endif
 
    # RetroAchievements
    ifeq ($(HAVE_CHEEVOS), 1)

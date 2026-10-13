@@ -1385,6 +1385,10 @@ MENU
 /* DHGameCenter: DH Game Library */
 #include "../menu/dh_library_menu.c"
 #endif
+#if defined(HAVE_NETWORKING) && defined(HAVE_CLOUDSYNC)
+/* DHGameCenter: Cloud Sync conflict resolution menu */
+#include "../menu/cloud_sync_conflict_menu.c"
+#endif
 #ifdef HAVE_LIBRETRODB
 #include "../menu/menu_explore.c"
 #include "../tasks/task_menu_explore.c"

@@ -46,6 +46,9 @@
 
 #include "menu_driver.h"
 #include "dh_library_menu.h"
+#if defined(HAVE_NETWORKING) && defined(HAVE_CLOUDSYNC)
+#include "cloud_sync_conflict_menu.h"
+#endif
 #include "menu_cbs.h"
 #include "../driver.h"
 #include "../list_special.h"
@@ -2586,6 +2589,10 @@ static void menu_cbs_init(
 #ifdef HAVE_NETWORKING
    /* DHGameCenter: callbacks of 'DH Game Library' entries */
    dh_library_menu_cbs_init(cbs, path, label, type);
+#ifdef HAVE_CLOUDSYNC
+   /* DHGameCenter: callbacks of the sync conflict menu */
+   cloud_sync_conflict_menu_cbs_init(cbs, path, label, type);
+#endif
 #endif
 }
 
