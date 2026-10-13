@@ -1872,7 +1872,7 @@
 				HEADER_SEARCH_PATHS = "$(inherited)";
 				INFOPLIST_KEY_CFBundleDisplayName = RetroArch;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
-				IOS_BUNDLE_IDENTIFIER = com.libretro.RetroArchiOS11;
+				IOS_BUNDLE_IDENTIFIER = com.darrenhuang.RetroArch;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LIBRARY_SEARCH_PATHS = "";
 				LLVM_LTO = YES_THIN;
@@ -1931,7 +1931,7 @@
 				HEADER_SEARCH_PATHS = "$(inherited)";
 				INFOPLIST_KEY_CFBundleDisplayName = RetroArch;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
-				IOS_BUNDLE_IDENTIFIER = com.libretro.RetroArchiOS11;
+				IOS_BUNDLE_IDENTIFIER = com.darrenhuang.RetroArch;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LIBRARY_SEARCH_PATHS = "";
 				LLVM_LTO = YES_THIN;
